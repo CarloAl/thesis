@@ -1,0 +1,3 @@
+#offerRide Destination leavingtime[minutes] radius[km] #freeplaces price
+
+#LFlift Destination leavingtime[minutes] radius[km] #Neededplaces price
