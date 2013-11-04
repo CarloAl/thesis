@@ -1,0 +1,57 @@
+<html>
+<head>
+    <title>WS</title>
+    <script >
+        var connection = new WebSocket('ws://127.0.0.1:8080');
+        connection.onopen = function () {console.log("open");};
+        connection.onmessage = matchFound;
+        connection.onclose = function(event) {console.log(event);};
+        
+        function matchFound(e) {
+            console.log(e);
+            data = JSON.parse(e.data);
+            string = 'Match Found! Call ' + data.username + ' at ' + data.phone;
+            document.getElementById('response').innerHTML = string; 
+        };
+
+        function sendSocket(){
+            console.log(document.getElementById('destination').value);
+            connection.send(JSON.stringify({ 
+                destination: document.getElementById('destination').value,
+                passenger: document.getElementById('passenger').value,
+                price: document.getElementById('price').value,
+                radius: document.getElementById('radius').value,
+                latitude: document.getElementById('latitude').value,
+                longitude: document.getElementById('longitude').value,
+                username: document.getElementById('username').value,
+                taxi: document.getElementById('taxi').checked,
+                phone: document.getElementById('number').value, 
+                time: document.getElementById('time').value,
+            }));
+
+        }
+        
+    </script>
+</head>
+<body>
+    Insert your data<br>
+    <form name='data'>
+        <input type="radio" name="taxi" id="taxi" value="taxi" checked>Offer a lift
+        <input type="radio" name="taxi" id="passenger" value="passenger">Looking for a lift<br>
+        Name: <input type='text' name='username' id='username' value='carlo'><br>
+        Destination: <input type='text' name='destination' id='destination' value='VUB'><br>
+        Passenger: <input type='text' name='passenger' id='passenger' value="3"><br>
+        Price: <input type='text' name='price' id='price' value="10"><br>
+        Radius[km]: <input type='text' name='radius' id='radius' value="3"><br>
+        Latitude: <input type='text' name='latitude' id='latitude' value="7.39"><br>
+        Longitude: <input type='text' name='longitude' id='longitude' value="52.12"><br>
+        Leaving time: <input type='time' name='time' id='time' value="14:32"><br>
+        Phone number: <input type='number' name='number' id='number' value="04756323"><br>
+        <button  type="button" onclick="sendSocket()">Submit</button>
+    </form>
+
+    <div id='response'>
+    </div>
+
+</body>
+</html>
