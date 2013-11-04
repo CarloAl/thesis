@@ -3,7 +3,7 @@
     <title>WS</title>
     <script >
         var connection = new WebSocket('ws://127.0.0.1:8080');
-        connection.onopen = function () {console.log("websocket open");};
+        connection.onopen = function () {console.log("Websocket open");};
         connection.onmessage = matchFound;
         connection.onclose = function(event) {console.log(event);};
         
@@ -13,7 +13,7 @@
             string = 'Match Found! Call ' + data.username + ' at ' + data.phone;
             document.getElementById('response').innerHTML = string; 
         };
-        
+
         function sendSocket(){
             console.log(document.getElementById('destination').value);
             connection.send(JSON.stringify({ 

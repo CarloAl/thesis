@@ -110,10 +110,8 @@ rule matching{
 		p : Passenger p.destination == t.destination && dateCmp(p.time ,t.time) < 0  && p.person <= t.person
 		&& checkDistance(t.lat, t.long, p.lat,p.long,p.radius, t.radius) && p.maxPrice <= t.maxPrice; 
 	}then{
-		console.log("match!");
-		debugger;
+		console.log("match!");		
 		modify(t,function(){
-			debugger;
 			if(t.person > p.person){
 				t.person = t.person - p.person;
 			}
@@ -123,8 +121,6 @@ rule matching{
 			retract(t);
 		}
 		flow.retract(p);
-		
-		//console.log(retract(p));
 	}
 }
 
