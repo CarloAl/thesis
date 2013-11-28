@@ -245,7 +245,7 @@ function getStringPassenger(username, lat, longi , taxi,time){
 setTimeout(function(){
   twitTaxi.verifyCredentials(function (err, data) {
               console.log(err);
-          }).updateStatus('#offerRide VUB 14:20 5 5 10 4.3973331 50.8462136',function (err, data) {
+          }).updateStatus('#offerRide VUB 14:21 5 5 10 4.3973331 50.8462136',function (err, data) {
               console.log(err + '\n' +data);
               console.log("\ntweet offer ride sent");
           });
@@ -253,7 +253,7 @@ setTimeout(function(){
 setTimeout(function(){
   twitTaxi.verifyCredentials(function (err, data) {
               console.log(err);
-          }).updateStatus('#LFlift VUB 14:19 5 4 10 4.3973332 50.8462136',{display_coordinates: 'true'},function (err, data) {
+          }).updateStatus('#LFlift VUB 14:20 5 4 10 4.3973332 50.8462136',{display_coordinates: 'true'},function (err, data) {
               //console.log(data);
               console.log("\n tweet lf ride sent");
           });

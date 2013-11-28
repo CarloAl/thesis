@@ -6,7 +6,6 @@ var twitter = require('./stream');
 
 
 function tweet(taxi,passenger){
-  debugger;
   var passengerMsg = getStringPassenger(passenger.userName,taxi.lat,taxi.long,taxi.userName,taxi.time.toLocaleTimeString());
   var taxiMsg      = getStringTaxi(taxi.userName,passenger.person,taxi.destination,passenger.userName);
   console.log("found matching ");
@@ -17,21 +16,12 @@ function tweet(taxi,passenger){
   }).updateStatus(taxiMsg,function (err, data) {
       console.log(err);
   });
-  //retweet in case of  extra seat
-  /*if(taxi.person > passenger.person){
-    var msg = "#offerRide " + taxi.destination + " " + taxi.time + " " + taxi.radius + " " + (taxi.person - passenger.person) + " " +
-               taxi.maxPrice + " " + taxi.long + " " + taxi.lat;
-    twitTaxi.updateStatus(msg,function (err,data) {
-
-    });*/
-  }
 }
-
 
 var flow = nools.compile("./rule.nools",{scope: {tweet: tweet }});
 
 
-
+  
 Taxi = flow.getDefined("Taxi");
 Passenger = flow.getDefined("Passenger");
 
@@ -72,6 +62,7 @@ twitPassenger.stream('statuses/filter', {'track':hashtagPassenger}, function(str
       person : newPassenger.person , maxPrice: newPassenger.maxPrice,
       long: newPassenger.long,   lat: newPassenger.lat,  userName: newPassenger.userName, matched : false });
     
+    console.log("\n" + aPassenger);
     console.log("\n" + session1.assert(aPassenger));
     //console.log("\n" + session1.assert(p1));
   });
@@ -106,8 +97,9 @@ twitTaxi.stream('statuses/filter', {'track': hashtagTaxi}, function(stream) {
       var aTaxi = new Taxi({destination : newTaxi.destination, time : date, radius : newTaxi.radius , 
       person : newTaxi.person , maxPrice: newTaxi.maxPrice,
       long: newTaxi.long,   lat: newTaxi.lat,  userName: newTaxi.userName, matched : false });
-      
-      console.log("\n" + session1.assert(aTaxi));
+      debugger;
+      console.log("\n" + aTaxi);
+      session1.assert(aTaxi);
       //console.log("\n" + session1.assert(t1));
       
   });
@@ -168,26 +160,26 @@ function readData(data,coordinates){
 setTimeout(function(){
   twitTaxi.verifyCredentials(function (err, data) {
               console.log(err);
-          }).updateStatus('#offerRide merode 14:30 8 4 7 4.3973331 50.8462136',function (err, data) {
-              console.log(err + '\n' + data);
+          }).updateStatus('#offerRide VUB 14:33 8 4 7 4.3973331 50.8462136',function (err, data) {
+              //console.log(err + '\n' + data);
               console.log("\ntweet offer ride sent");
           });
 },1000)
 setTimeout(function(){
   twitTaxi.verifyCredentials(function (err, data) {
               console.log(err);
-          }).updateStatus('#LFlift merode 14:20 6 4 5 4.3973331 50.8462136',{display_coordinates: 'true'},function (err, data) {
+          }).updateStatus('#LFlift VUB 14:23 6 4 5 4.3973331 50.8462136',{display_coordinates: 'true'},function (err, data) {
               //console.log(data);
               console.log("\n tweet lf ride sent");
           });
 },2000)
 
-
+/*
 setTimeout(function(){
   twitTaxi.verifyCredentials(function (err, data) {
               console.log(err);
           }).updateStatus('#offerRide softlab 14:30 8 5 5 4.3973331 50.8462136',function (err, data) {
-              console.log(err + '\n' +data);
+              
               console.log("\ntweet offer ride sent");
           });
 },1200)

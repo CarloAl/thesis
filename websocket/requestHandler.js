@@ -5,7 +5,6 @@ var exec = require("child_process").exec,
 
 
 function start(response,request) {
-   console.log("Request handler 'start' was called.");
    
    /*exec("ls -lah", function (error, stdout, stderr) {
       console.log("Request handler 'start' was called and continued.");
@@ -36,7 +35,7 @@ function start(response,request) {
    
 
 }
-
+/*
 function upload(response,request) {
    console.log("Request handler 'upload' was called.");
    
@@ -46,6 +45,7 @@ function upload(response,request) {
       console.log("parsing done");
       /* Possible error on Windows systems:
       tried to rename to an already existing file */
+      /*
       console.log(files.upload.path);
       fs.rename(files.upload.path, "./tmp/test.png",function(error){
          console.log(error);
@@ -78,6 +78,8 @@ function show(response,request){
    
 }
 
-exports.start = start;
+
 exports.upload = upload;
-exports.show = show;
+exports.show = show;*/
+
+exports.start = start;
