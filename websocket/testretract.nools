@@ -1,0 +1,17 @@
+define p{
+	test: 'test'
+}
+
+define t{
+	test: 'test'
+}
+
+rule r{
+	when{
+		p1 :p;
+        t1: t
+	}then{
+		console.log(p1);
+		retract (p1);
+	}
+}

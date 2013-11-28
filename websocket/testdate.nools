@@ -1,0 +1,10 @@
+rule r{
+	when{
+		d1 : Date;
+		d2 : Date dateCmp(d1 ,d2) 
+	}then{
+		console.log("match!");    
+	}            
+}
+
+//dateCmp works for equal date
