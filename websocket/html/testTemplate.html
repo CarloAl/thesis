@@ -1,0 +1,74 @@
+<html>
+<head>
+    <title>CarSharing</title>
+    
+    <script type="text/javascript" src="/js/clientLib.js"></script>
+    <script type= 'text/javascript'>
+
+
+
+
+        
+        function sendSocket(){
+            
+            var type = document.getElementById('istaxi').checked?'taxi':"passenger"
+
+//            var f = function(){return arguments[0] == arguments[1];}
+
+            //u cannot make typos here
+            var filter = function(taxi){ return taxi.destination == "VUB" && taxi.price == 3;}
+
+
+  /*          obj = { 
+                destination : "VUB",
+                //problem u could have alrady a field called ***Function, possibile solution: for every field have pair  (data,function)
+                //ex: destination: {data : "VUB",function : "return arguments[0] == arguments[1];"}
+                //destinationFunction: "return arguments[0] == arguments[1];"
+                //destinationFunction: f.toString() to string in the library
+                destinationFunction: "="
+                price : 3
+                pricefucntion ">"
+            }*/
+
+
+
+            registerTo(type,filter, function(message){
+                console.log("received")
+                console.log(message);
+
+            });
+            //mySend(obj,type);
+
+        }
+    </script>
+    
+</head>
+<body>
+     <form name='data' style="text-align:center">
+            <h2 >Select your template </h2>
+            <input  type="radio" name="taxi" id="istaxi" value="taxi" >Taxi
+            <input  type="radio" name="taxi" id="ispassenger" value="passenger" checked>Passenger<br>
+            Name: <input  placeholder = '' type='text' name='username' id='username' value='carlo'><br>
+            Destination: <input type='text' name='destination' id='destination' value='VUB'><br>
+            Passenger: <input type='text' name='passenger' id='passenger' value='3'><br>
+                        <!-- <select>
+                          <option value=1>1</option>
+                          <option value=2>2</option>
+                          <option value=3>3</option>
+                          <option value=4>4</option>
+                      </select><br> -->
+            Price: <input type='text' name='price' id='price' value=""><br>
+            Radius[km]: <input type='text' name='radius' id='radius' value=""><br>
+            Latitude: <input type='text' name='latitude' id='latitude' value=""><br>
+            Longitude: <input type='text' name='longitude' id='longitude' value=""><br>
+            Leaving time: <input type='time' name='time' id='time' value=""><br>
+            Phone number: <input type='number' name='number' id='number' value=""><br>
+            <button class="btn btn-lg btn-primary btn-block" type="button" onclick="sendSocket()">Submit</button>
+        </form>
+
+        <div id='response'>
+        </div>
+
+
+</body>
+</html>
