@@ -1,8 +1,4 @@
-var path = require('path');
-var http = require("http");
-var url = require("url");
 var lib  = require("./lib");
-var fs = require('fs');
 
 var TaxiO = {
 	destination: '',
@@ -36,39 +32,41 @@ var PassengerO = {
 
 var Taxi = lib.defineTemplate('Taxi',TaxiO);
 var Passenger = lib.defineTemplate('Passenger',PassengerO);
+var Match = lib.defineTemplate('Match',{Passenger:'',Taxi:''});
 var file = "./rule.nools";
-var flow = lib.compile({matchFound: matchFound },file)
+lib.initNools(file);
+//var flow = lib.compile({/*matchFound: matchFound */},file)
 
 
-count = 0;
+/*var Taxi = lib.defineTemplate('Taxi',TaxiO);
+var Passenger = lib.defineTemplate('Passenger',PassengerO);
+var Match = lib.defineTemplate('Match',{Passenger:'',Taxi:''});*/
+
+//object with cancel method to cancel ws =lib.onnewfact('taxi',function(message))
+//match(rule, function(object) {});
+
+//match(riderule, function(taxi, passenger) {});
+
+/*/////////////////////////////////////****************
+
+ALL OF THIS HAS TO GO THE LIBRARY
+*************
 
 
-var session1 = flow.getSession();
 
-function matchFound(taxi,passenger){
-	console.log("\nmatch found");
-// we want the second parameter specifying the name of the event beucase dispatching only on the type of the attribute 
-//wouldn't permit to distinguisch if it is a new passenger, an update, a match...
-	lib.mySend(passenger,taxi,'matchFound');
-	lib.mySend(taxi,passenger,'matchFound');
-}
 
-function start(route, handle){
-   function onRequest(request,response) {
-      var pathname = url.parse(request.url).pathname;
-      console.log("request for " + pathname + " received");
-      route(handle,pathname,response,request);
-   }
-   http.createServer(onRequest).listen(8888);
-   console.log("server started");
-}
+
+
 
 var WebSocketServer = require('ws').Server, 
 	wss = new WebSocketServer({port: 8080});
 
+
+
 lib.onConnection(wss,function(ws){
 
 	ws.addEventListener('taxi',function(message){
+		//could create a function that assert automatically..
 		console.log('received:');
 		console.log(message);
 		lib.myAssert(session1,message,flow);
@@ -81,63 +79,32 @@ lib.onConnection(wss,function(ws){
 
     lib.onClose(ws);
 });
+/*********************************************************************************/
+
+/***************************************************
+THIS ONE WILL GO IN THE LBIRARY AS WELL, IT WILL BE CALLES NOTIFY(TARGET,MESSAGE) AND WILL BE CALLED TWICE IN THE THEN OF THE RULE
+//should be automatically
+function matchFound(taxi,passenger){
+	console.log("\nmatch found");
+// we want the second parameter specifying the name of the event beucase dispatching only on the type of the attribute 
+//wouldn't permit to distinguisch if it is a new passenger, an update, a match...
+	lib.mySend(passenger,taxi,'matchFound');
+	lib.mySend(taxi,passenger,'matchFound');
+}
 
 
-session1.matchUntilHalt()
-    .then(
-        function(){
-            console.log("\nmatch done");
-        },
-        function(err){
-            console.log(err.stack);
-        }
-    );
+*******************************/
+/*function start(route, handle){
+   function onRequest(request,response) {
+      var pathname = url.parse(request.url).pathname;
+      console.log("request for " + pathname + " received");
+      route(handle,pathname,response,request);
+   }
+   http.createServer(onRequest).listen(8888);
+   console.log("server started");
+}
 
 
-exports.start = start;
+exports.start = start;*/
 
 
-http.createServer(function (request, response) {
-    console.log('request starting...');
-	debugger;
-	
-	var filePath = '.' + request.url;
-	if (filePath == './')
-		filePath = './html/start.html';
-	var extname = path.extname(filePath);
-	var contentType = 'text/html';
-	switch (extname) {
-		case '.js':
-			contentType = 'text/javascript';
-			break;
-		case '.css':
-			contentType = 'text/css';
-			break;
-	}
-	
-
-	console.log(filePath);
-	path.exists(filePath, function(exists) {
-	
-		if (exists) {
-			console.log(' exist');
-			fs.readFile(filePath, function(error, content) {
-				if (error) {
-					response.writeHead(500);
-					response.end();
-				}
-				else {
-					response.writeHead(200, { 'Content-Type': contentType });
-					response.end(content, 'utf-8');
-				}
-			});
-		}
-		else {
-			console.log('don t exist');
-			response.writeHead(404);
-			response.end();
-		}
-	});
-	
-}).listen(8888);
-console.log('Server running at http://127.0.0.1:8888/');

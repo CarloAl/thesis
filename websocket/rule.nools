@@ -13,8 +13,9 @@
     matched: false
 }
 
+
 define Passenger{
-	destination: '',
+	destination: 'vub',
 	time: '',
 	radius: '',
     person: '',
@@ -26,6 +27,11 @@ define Passenger{
     ws : '',
     phone: '',
     matched: false
+}*/
+/*
+define Match{
+	Passenger : '',
+	Taxi : ''
 }*/
 
 //parser error test();
@@ -111,30 +117,35 @@ rule test {
 
 rule matchingLowerSeats{
 	when{
-		t : Taxi;
+		t : Taxi t.destination == t.source;
 		p : Passenger p.destination == t.destination && sameDay(p.time,t.time)  && p.person < t.person
 		&& checkDistance(t.lat, t.long, p.lat,p.long,p.radius, t.radius) && p.price <= t.price || log(t,p,"lower"); 
 	}then{
-		debugger;
+		//assert(new Match({Passenger: p,Taxi : t));
 		console.log("match!");                
         modify(t,function(){
             t.person = t.person - p.person;
         });
-        matchFound(t,p);
+        notify(t,p);
+        notify(p,t);
         retract(p);
 	}
 }
-
+//u robably cannot factor our the commone behavior of the 2 then clauses because of scope (retract is called on...)?
 rule matchingEqualSeats{
 	when{
 		t : Taxi;
 		p : Passenger p.destination == t.destination && sameDay(p.time,t.time)   && p.person == t.person
 		&& checkDistance(t.lat, t.long, p.lat,p.long,p.radius, t.radius) && p.price <= t.price || log(t,p,"equal"); 
 	}then{
+		//apparently it works even with 
+		assert(new Match({Passenger: p ,Taxi : t}));
 		console.log("match!");                
-        matchFound(t,p);
-        retract(t);
+        //matchFound(t,p);
+        notify(t,p);
+        notify(p,t);
         console.log("\nretract taxi!!");
+        retract(t);
         retract(p);
 	}
 }

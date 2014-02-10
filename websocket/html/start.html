@@ -6,21 +6,29 @@
     <script type= 'text/javascript'>
 
 
-        var connection = myWebSocket('ws://127.0.0.1:8080');
+
+
+        //var connection = myWebSocket('ws://127.0.0.1:8080');
         //connection.onopen = function () {console.log("Websocket open");};
         //connection.onmessage = matchFound;
-        connection.onclose = function(event) {console.log(event);};
         
-        connection.addEventListener('matchFound',matchFound);
+        //I could enforce here the return typed, ie if I am a taxi I want passenger a return type
+        
+        //matchfound should be a template not 'matchfound'.
+
+        //mylib.onEvent('myevent',callback)
 
         function matchFound(data) {
-            console.log(data);
             string = 'Match Found! Call ' + data.username + ' at ' + data.phone;
             document.getElementById('response').innerHTML += string; 
         };
 
         function sendSocket(){
-            var string = JSON.stringify({ 
+            if(document.getElementById('istaxi').checked)
+                addEventListener('passenger',matchFound);
+            else
+                addEventListener('taxi',matchFound);
+            var obj = { 
                 destination: document.getElementById('destination').value,
                 person: document.getElementById('passenger').value,
                 price: document.getElementById('price').value,
@@ -30,18 +38,17 @@
                 username: document.getElementById('username').value,
                 taxi: document.getElementById('istaxi').checked,
                 phone: document.getElementById('number').value, 
-                time: document.getElementById('time').value,
-                __type: document.getElementById('istaxi').checked?'taxi':"passenger"
-            })
-            console.log(string);
-            connection.send(string);
+                time: document.getElementById('time').value
+            };
+            var type = document.getElementById('istaxi').checked?'taxi':"passenger"
+            mySend(obj,type);
 
         }
     </script>
     
 </head>
 <body>
-     <form name='data' >
+     <form name='data' style="text-align:center">
             <h2 >Insert your data </h2>
             <input  type="radio" name="taxi" id="istaxi" value="taxi" >Offer a lift
             <input  type="radio" name="taxi" id="ispassenger" value="passenger" checked>Looking for a lift<br>
