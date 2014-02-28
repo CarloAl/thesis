@@ -1,40 +1,15 @@
 var lib  = require("./lib");
 
-var TaxiO = {
-	destination: '',
-	time: '',
-	radius: '',
-    person: '',
-    price: '',
-    long: '',
-    lat: '',
-    username: '',
-    userId: '',
-    ws : '',
-    phone: '',
-    matched: false
-}
-
-var PassengerO = {
-	destination: '',
-	time: '',
-	radius: '',
-    person: '',
-    price: '',
-    long: '',
-    lat: '',
-    username: '',
-    userId: '',
-    ws : '',
-    phone: '',
-    matched: false
-}
-
-var Taxi = lib.defineTemplate('Taxi',TaxiO);
-var Passenger = lib.defineTemplate('Passenger',PassengerO);
-var Match = lib.defineTemplate('Match',{Passenger:'',Taxi:''});
+myVar Taxi = {destintion,time,radius,person,price,long,lat,username,phone}
+myVar Passenger = {destintion,time,radius,person,price,long,lat,username,phone}
+myVar Match = {passenger,taxi};
 var file = "./rule.nools";
 lib.initNools(file);
+
+//command to run sweetjs
+//  sjs -o server.sjs -m ./macro.js server.js
+
+
 //var flow = lib.compile({/*matchFound: matchFound */},file)
 
 

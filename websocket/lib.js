@@ -1,4 +1,4 @@
-var nools = require("nools");
+var nools = require("./nools/index");
 var path = require('path');
 var http = require("http");
 var url = require("url");
@@ -6,6 +6,7 @@ var fs = require('fs');
 
 var templateId = 0;
 var objectId = 0;
+//array with all the open websocket
 var webSockets = [];
 //array with all the defined template
 var templates = [];
@@ -14,11 +15,18 @@ var session,flow;
 //for each template I have an array of websockets (the clients) interested to them
 var listeners = []; 
 
+//value of the __type in a websocket message, indicate that we want to assert a new fact
+var NEW_FACT = 0;
 //value of the __type in a websocket message, indicate that we want to register to a template
 var REGISTER_TEMPLATE = 1;
+//value of the __type in a websocket message, indicate that the client is requesting a class template
+var REQUIRE_TEMPLATE = 2;
+var ANSWER_TEMPLATE = 3;
 
 var WebSocketServer = require('ws').Server, 
 wss = new WebSocketServer({port: 8080});
+
+var Fiber = require('fibers');
 
 
 http.createServer(function (request, response) {
@@ -83,8 +91,6 @@ onConnection(wss,function(ws){
 
 
 function defineTemplate(name,obj,options){
-	if(indexofTemplate(name) > - 1)
-		throw "Template already defined"
 	var template = function (opts){
 		opts = opts || {};
         for (var i in opts) {
@@ -96,14 +102,17 @@ function defineTemplate(name,obj,options){
 
 	};
 	template.prototype.__type = name;
-	//template.prototype.__templateId = templateId;
+	template.prototype.__templateId = templateId;
+	template.__type = name;
+	template.__templateId = templateId;
 	//if(options.automaticallyAsserted == true)
 	//	template.automaticallyAsserted = true;
-	//templateId++;
+	templateId++;
 	for(i=0;i<obj.size; i++){
 		template.prototype[obj[i]] = 'not yet instantiated'
 	}
-	templates.push(template);
+	//templates.push(template);
+	templates[name] = template;
 	return template;
 }
 
@@ -116,10 +125,19 @@ function initNools(file,scope){
 	session = flow.getSession();
 
 	session.on("assert", function(data){
-		console.log("data asserted:");
-		console.log(data);
+		//console.log("data asserted:");
+		//console.log(data);
+		
 		var type = getType(data);
 		sendToListeners(type,data);
+	});
+
+	session.on("modify", function(data){
+		//console.log("data asserted:");
+		//console.log(data);
+		
+		if(data.person <= 0)
+			debugger;
 	});
 	/*session.on('match',function(){
 		console.log("Match");
@@ -143,7 +161,7 @@ function initNools(file,scope){
 		ses.on('test',function(){
 			console.log("work\n\n");
 		});
-		debugger;
+
 		ses.match().then(
 	        function(){
 	            console.log("\nmatch done");
@@ -169,10 +187,12 @@ function initNools(file,scope){
 function compile(scope,file){
 	var define = {};
 	scope.notify = notify;
-	for(i = 0; i < templates.length; i++){
-		define[templates[i].prototype.__type] = templates[i];
-	}
-	return nools.compile(file,{define:define, scope: scope});
+
+	//for(i = 0; i < templates.length; i++){
+		for(i in templates)
+			define[templates[i].prototype.__type] = templates[i];
+	//}
+	return nools.compile(file,{define: define, scope: scope});
 }
 
 //given an array of facts and the conditions, as code to be executed on the facts, give back a subset of the facts that hold the conditions
@@ -215,8 +235,8 @@ function filterOut(facts,filter){
 	//for every fact of that type
 	for(var i = 0 ; i < facts.length; i++){
 		eval("var filterFunction = " + filter)
-		if(filterFunction(facts[i]))
-			filteredFacts.push(facts[i]);
+		if(filterFunction(facts[i].object))
+			filteredFacts.push(facts[i].object);
 	}
 	return filteredFacts;
 }
@@ -224,70 +244,98 @@ function filterOut(facts,filter){
 
 //add a listener {ws,condition} for a specific template
 function addListener(type,ws,message){
+	if(typeof type == "string")
+		type = type.toLowerCase();
 	if(listeners[type] == undefined)
 		listeners[type] = [];
-	listeners[type].push({ws: ws, filter: message.filter});
+	listeners[type].push({ws: ws, filter: message.data.filter});
 }
 
-//send to all the listeners interested to type the new fact
+//send to all the listeners interested to templateId the new fact
 function sendToListeners(type,obj){
 	if(listeners[type] != undefined)
-	for(var i = 0; i < listeners[type].length; i++){
-		filtered = filterOut([obj],listeners[type][i].filter);
-		if(filtered.length > 0)
-			//it is filterd[0] because filterOut gives back an array but here it is going to be only one new facts
-			mySend(listeners[type][i].ws,filtered[0],type);
-	}
+		for(var i = 0; i < listeners[type].length; i++){
+			//I have to wrap ob in {object : obj } because when I call filterOut it exepcts an array of facts retrieved from
+			//the db, so with _id and obejct field.
+			filtered = filterOut([{object : obj}],listeners[type][i].filter);
+			if(filtered.length > 0)
+				//it is filterd[0] because filterOut gives back an array but here it is going to be only one new facts
+				mySend(listeners[type][i].ws,filtered,type);
+		}
 }
 
 //dispatch the new message
 function dispatch(message,ws){
-	console.log('received : ');
-	console.log(message);
+	//console.log('received : ');
+	//console.log(message);
 	message = JSON.parse(message);
-	if(message.time != undefined){
+	
+	if(message.data.time != undefined){
 		var date = new Date();
-    	date.setMinutes((message.time.split(':'))[1]);
-    	date.setHours((message.time.split(':'))[0]);
+    	date.setMinutes((message.data.time.split(':'))[1]);
+    	date.setHours((message.data.time.split(':'))[0]);
     	date.setSeconds(0);
-    	message.time = date;
+    	message.data.time = date;
     }
-    type = getType(message);
+    var type = getType(message);
     if(type == REGISTER_TEMPLATE){
-    	template = getTemplateFromMessage(message);
+    	var template = getTemplateFromMessage(message);
+
     	var noolsTemplate = flow.getDefined(template);
-    	var facts = session.getFacts(noolsTemplate);
-    	if(facts.length != 0){
-    		facts = filterOut(facts,message.filter);
-    		if(facts.length > 0)
-    			mySend(ws,facts,template);
-		}
+    	//get facts now is async cuz is a query to mongodb
+    	session.getFacts(noolsTemplate,function(facts){
+    		if(facts.length != 0){
+	    		facts = filterOut(facts,getFilterFromMessage(message));
+	    		if(facts.length > 0)
+	    			mySend(ws,facts,template);
+			}
+    	});
+    	
 		addListener(template,ws,message);
     }else{
-	    if((index = indexofTemplate(type)) < 0){
-			throw "template not present in the list of template";
-			//more checking that all the field are instantied, maybe
+    	if( type == NEW_FACT){
+    		var templateName = getTemplateNameFromMessage(message)
+		    if((index = indexofTemplatebyName(templateName)) == -1){
+				throw "template not present in the list of template";
+				//more checking that all the field are instantied, maybe
+			}else{
+				obj = new templates[index](message.data);
+				//if(templates[index].automaticallyAsserted)
+				//save the websocket for a possible answer 
+				webSockets[obj.objectId] = ws;
+				myAssert(obj);
+				checkCBandCall(ws.customCallBack[type],obj);
+			}
 		}else{
-			obj = new templates[index](message);
-			//if(templates[index].automaticallyAsserted)
-			//save the websocket for a possible answer 
-			webSockets[obj.objectId] = ws;
-			myAssert(obj);
-			
+			if(type == REQUIRE_TEMPLATE){
+
+				var templatesName = message.data;
+
+				var answerTemplates = [];
+				for(var i = 0 ; i < templatesName.length; i++){
+					var Template = templates[templatesName[i]];
+					answerTemplates.push({'template': Template.toString(), '__type': Template.__type});
+				}
+				mySend(ws,answerTemplates,ANSWER_TEMPLATE);
+
+			}
 		}
-		checkCBandCall(ws.customCallBack[type],obj);
+		
 	}
 }
 
 //nools session
 function myAssert(fact){
-	if((index = indexofTemplate(fact.__type)) < 0){
+
+	if((index = indexofTemplatebyName(fact.__type)) == -1){
 		throw "template not present in the list of template";
 	}else{
 		//Template = templates[index]; doesn t work, probably nools does something behind the scenes
 		//the flow already makes comparison non case sensitive
 		/*Template = flow.getDefined(fact.__type);
 		asserted = new Template(fact);*/
+		if(fact.person <= 0)
+					debugger;
 		asserted = session.assert(fact);		
 	}
 	return asserted;
@@ -299,7 +347,7 @@ function notify(target,message){
 	if(typeof webSockets[target.objectId] == 'undefined')
 		throw "no websocket associated to " + target;
 	else{
-		mySend(webSockets[target.objectId],message,getType(message));
+		mySend(webSockets[target.objectId],message,getType(message)); //MESSAGE.TEMPLATEID
 	}
 }
 
@@ -318,12 +366,12 @@ function onConnection(wss,cb){
 	ws.customCallBack = [];
 	
 	ws.on('message', function(message) {       
-        dispatch(message,ws);
+        Fiber(function(){dispatch(message,ws)}).run();
     });
 
 	//not called anymore
 	ws.mySend = function(data){
-		data.__type = data.prototype.__type;
+		data.__templateId = data.prototype.__templateId;
 		ws.send(data);
 	}
 
@@ -361,14 +409,37 @@ function onClose(ws,cb){
 
 /*****util *******/
 function getType(message){
-	if(typeof message.__templateype == "string")
-    	return message.__type.toLowerCase();
+	if(typeof message.__type == "string")
+		message.__type = message.__type.toLowerCase();
     return message.__type;
 }
 
-function indexofTemplate(type){
-	for(i = 0; i < templates.length; i++)
-		if(templates[i].prototype.__type.toLowerCase() === type.toLowerCase())
+
+
+function getTemplateId(message){
+
+    return message.data.__templateId;
+}
+
+function indexofTemplatebyName(type){
+ 	/*for(i = 0; i < templates.length; i++)
+ 		if(templates[i].prototype.__type.toLowerCase() === type.toLowerCase())
+ 			return i;
+ 	return -1;*/
+ 	for(i in templates)
+ 		if(templates[i].prototype.__type.toLowerCase() === type.toLowerCase())
+ 			return i;
+ 	return -1;
+ }
+
+
+function indexofTemplate(templateId){
+	/*for(i = 0; i < templates.length; i++)
+		if(templates[i].prototype.__templateId == templateId)
+			return i;
+	return -1;*/
+	for(i in templates)
+		if(templates[i].prototype.__templateId == templateId)
 			return i;
 	return -1;
 }
@@ -376,26 +447,35 @@ function indexofTemplate(type){
 function checkCBandCall(cb,arg){
 	if(typeof cb == 'function')
 		cb(arg);
+	else{
+		//console.log('not a callack');
+	}
+}
+
+
+function getTemplateNameFromMessage(message){
+	if (message.data.__type == 'undefined')
+		throw 'template non defined'
 	else
-		console.log('not a callack');
+		return message.data.__type;
 }
 
 function getTemplateFromMessage(message){
-	if (message.template == 'undefined')
+	if (message.data.template == 'undefined')
 		throw 'template non defined'
 	else
-		return message.template;
+		if(typeof message.data.template == "string")
+			message.data.template = message.data.template.toLowerCase();
+		return message.data.template;
 }
 
+function getFilterFromMessage(message){
+	if (message.data.filter == 'undefined')
+		throw 'filter non defined'
+	else
+		return message.data.filter;
+}
 
-
-/*
-function myEqualsIgnoreCase(str1,str2){               
-        return (new String(str1.toLowerCase())==(newString(arg)).toLowerCase());
-}*/
-
-/*var lib = {};
-lib.defineTemplate = ;*/
 exports.defineTemplate = defineTemplate;
 exports.compile = compile;
 exports.onClose = onClose;

@@ -11,16 +11,25 @@
         
         function sendSocket(){
             
-            var type = document.getElementById('istaxi').checked?'taxi':"passenger"
+            //var type = document.getElementById('istaxi').checked?'taxi':"passenger"
+            if(document.getElementById('istaxi').checked)
+                require("Taxi","Passenger",f);
+            else
+                require("Passenger","Taxi",f);
+            // or u can require (Taxi) and send that 
+
 
 //            var f = function(){return arguments[0] == arguments[1];}
 
             //u cannot make typos here
-            var filter = function(taxi){ return taxi.destination == "VUB" && taxi.price == 3;}
+            //look for sandbox on js on server
+            function f(Template){
+                var filter = function(taxi){ return taxi.destination == "VUB" && taxi.price == 3;}
 
 
   /*          obj = { 
                 destination : "VUB",
+                price : 3
                 //problem u could have alrady a field called ***Function, possibile solution: for every field have pair  (data,function)
                 //ex: destination: {data : "VUB",function : "return arguments[0] == arguments[1];"}
                 //destinationFunction: "return arguments[0] == arguments[1];"
@@ -30,13 +39,12 @@
                 pricefucntion ">"
             }*/
 
+                registerTo(Template,filter, function(message){
+                    console.log("received")
+                    console.log(message);
 
-
-            registerTo(type,filter, function(message){
-                console.log("received")
-                console.log(message);
-
-            });
+                });
+            }
             //mySend(obj,type);
 
         }

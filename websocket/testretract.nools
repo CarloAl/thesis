@@ -6,12 +6,26 @@ define t{
 	test: 'test'
 }
 
+
 rule r{
 	when{
-		p1 :p;
-        t1: t
+		p1: p;
 	}then{
+		console.log(p1);
+
+		debugger;
+		modify(p1,function(p1){ p1.test = '1'; console.log(p1)});
+		retract(t1);
+		
+	}
+}
+/*
+rule r{
+	when{
+		p1: p;
+	}then{
+		console.log("firing r");
 		console.log(p1);
 		retract (p1);
 	}
-}
+}*/

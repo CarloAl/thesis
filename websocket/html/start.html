@@ -18,6 +18,8 @@
 
         //mylib.onEvent('myevent',callback)
 
+
+
         function matchFound(data) {
             string = 'Match Found! Call ' + data.username + ' at ' + data.phone;
             document.getElementById('response').innerHTML += string; 
@@ -28,6 +30,7 @@
                 addEventListener('passenger',matchFound);
             else
                 addEventListener('taxi',matchFound);
+            //recupare the data from the form to assert a new fact
             var obj = { 
                 destination: document.getElementById('destination').value,
                 person: document.getElementById('passenger').value,
@@ -36,12 +39,37 @@
                 lat: document.getElementById('latitude').value,
                 long: document.getElementById('longitude').value,
                 username: document.getElementById('username').value,
-                taxi: document.getElementById('istaxi').checked,
                 phone: document.getElementById('number').value, 
-                time: document.getElementById('time').value
-            };
-            var type = document.getElementById('istaxi').checked?'taxi':"passenger"
-            mySend(obj,type);
+                time: document.getElementById('time').value 
+                //__templateId : document.getElementById('istaxi').checked?'0':'1'
+            }
+
+
+            /* the way I d want it:
+            if(document.getElementById('istaxi').checked)
+                var Template = require("Taxi");
+            else
+                var Template = require("Passenger");
+            var fact = new Template(obj);
+            sendNewFact(fact);
+            */
+            
+
+
+
+            var f = function(Template){
+                    var fact = new Template(obj);
+                    sendNewFact(fact);        
+                }
+
+            if(document.getElementById('istaxi').checked)
+                //require ask for the definition of one or more "class" to the server. Last paramenter is the callback
+
+                require("Taxi","Passenger",f);//add erro
+            else
+                require("Passenger","Taxi",f);
+            
+
 
         }
     </script>

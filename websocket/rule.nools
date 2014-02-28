@@ -36,7 +36,13 @@ define Match{
 
 //parser error test();
 
+function deg2rad(deg) {
+  return deg * (Math.PI/180);
+}
+
+
 function getDistanceFromLatLonInKm(lat1,lon1,lat2,lon2) {
+
   if(lat1===lat2 && lon1===lon2){
    return 0
   }else{
@@ -53,9 +59,7 @@ function getDistanceFromLatLonInKm(lat1,lon1,lat2,lon2) {
   }
 }
 
-function deg2rad(deg) {
-  return deg * (Math.PI/180)
-}
+
 
 //when u write an if else u need always the {} or the parser gets an error
 
@@ -63,6 +67,7 @@ function deg2rad(deg) {
 
 
 function checkDistance(lat1,lon1,lat2,lon2,radius1,radius2){
+
   //var radius = radius1<radius2?radius1:radius2;
   var radius = Math.min(radius2,radius1);
   if(getDistanceFromLatLonInKm(lat1,lon1,lat2,lon2) <= radius){
@@ -74,23 +79,27 @@ function checkDistance(lat1,lon1,lat2,lon2,radius1,radius2){
 
 
 function sameDay(date1,date2){
+
 	if(date1.getDay() == date2.getDay() && date1.getMonth() == date2.getMonth() && date1.getFullYear() == date2.getFullYear() )
 		return true;
 	return false;
 }
 
 function log(t,p,b){
+
 	console.log(b);
 	console.log(t);
 	console.log(p);
 	console.log(p.destination == t.destination );
 	console.log( sameDay(p.time,t.time));
+	debugger;
 	if(b == "lower")
-	console.log(p.person < t.person);
+		console.log(p.person < t.person);
 	else
 		console.log(p.person == t.person);
 	console.log(checkDistance(t.lat, t.long, p.lat,p.long,p.radius, t.radius));
 	console.log(p.price <= t.price);
+	return true;
 }
 
 
@@ -115,38 +124,59 @@ rule test {
 
 		    /*&& dateCmp(p.time ,t.time) <= 0*/
 
+
+/* && p.destination == t.destination && sameDay(p.time,t.time) 
+		&& checkDistance(t.lat, t.long, p.lat,p.long,p.radius, t.radius) && p.price <= t.price; // || log(t,p,"lower"); */
+
 rule matchingLowerSeats{
 	when{
-		t : Taxi t.destination == t.source;
-		p : Passenger p.destination == t.destination && sameDay(p.time,t.time)  && p.person < t.person
-		&& checkDistance(t.lat, t.long, p.lat,p.long,p.radius, t.radius) && p.price <= t.price || log(t,p,"lower"); 
+		t : Taxi ;
+		p : Passenger p.person < t.person; 
 	}then{
 		//assert(new Match({Passenger: p,Taxi : t));
-		console.log("match!");                
+		console.log("match less!");                
+		if(p.person >= t.person)
+			debugger;
+		if(p.person <= 0 || t.person <= 0)
+			debugger;
         modify(t,function(){
-            t.person = t.person - p.person;
+            if(this.person <= 0 || p.person <= 0 )
+            	debugger;
+            //t.person = t.person - p.person;
+            this.person = this.person - p.person;
+            if(this.person <= 0 || p.person <= 0 )
+            	debugger;
         });
+		
+		/*assert(new Taxi({destination: t.destination,time: t.time,radius:t.radius,
+			person:(t.person - p.person),price:t.price,long:t.long,lat:t.lat,username:t.username,phone:t.phone}));
+		*/
+		
         notify(t,p);
         notify(p,t);
+        //retract(t);
         retract(p);
 	}
 }
 //u robably cannot factor our the commone behavior of the 2 then clauses because of scope (retract is called on...)?
+/* &&  p.destination == t.destination && sameDay(p.time,t.time) 	 && checkDistance(t.lat, t.long, p.lat,p.long,p.radius, t.radius) && p.price <= t.price; // || log(t,p,"equal"); */
 rule matchingEqualSeats{
 	when{
 		t : Taxi;
-		p : Passenger p.destination == t.destination && sameDay(p.time,t.time)   && p.person == t.person
-		&& checkDistance(t.lat, t.long, p.lat,p.long,p.radius, t.radius) && p.price <= t.price || log(t,p,"equal"); 
+		p : Passenger p.person == t.person;
 	}then{
+		if(p.person != t.person)
+			debugger;
 		//apparently it works even with 
-		assert(new Match({Passenger: p ,Taxi : t}));
-		console.log("match!");                
+		//assert(new Match({Passenger: p ,Taxi : t}));
+		console.log("match equal!");                
         //matchFound(t,p);
         notify(t,p);
         notify(p,t);
-        console.log("\nretract taxi!!");
+        
         retract(t);
         retract(p);
+
 	}
 }
 
@@ -170,7 +200,7 @@ rule Rule2{
 	}then{
 		modify(e1,function(){
 			console.log(e1.destination);
-			debugger;
+
 			e1.destination = null;
 			console.log("\n dest:" + e1.destination);
 		});
