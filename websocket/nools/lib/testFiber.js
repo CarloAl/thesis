@@ -23,18 +23,18 @@ function handleRequest (id) {
   }).run();
 }*/
 
-var id = "531052943bbf969913000002";
+var id = "5314834eb8e68b4f32000002";
 
 //{ $set: {"object.person" : 13}}
 
-db.collection('passenger').find({
+db.collection('passenger').findOne({
     _id:mongojs.ObjectId(id)
 },function(err,docs){
 	debugger;
-	docs[0].object.person = 25;
-	db.collection('passenger').update({
-                query: { _id : mongojs.ObjectId(id) },
-                update: docs[0] }, function(err, doc, lastErrorObject) {
+	docs.object.person = 25;
+	db.collection('passenger').update(
+                { _id : mongojs.ObjectId(id) },
+                docs , function(err, doc, lastErrorObject) {
                     debugger;
                     if(err) throw new Error("the fact to modify does not exist");
                 });

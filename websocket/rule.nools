@@ -124,14 +124,44 @@ rule test {
 
 		    /*&& dateCmp(p.time ,t.time) <= 0*/
 
+rule matchingEqualSeats{
+	when{
+		t : Taxi;
+		p : Passenger p.person <= t.person &&  p.destination == t.destination && sameDay(p.time,t.time) 
+		&& checkDistance(t.lat, t.long, p.lat,p.long,p.radius, t.radius) && p.price <= t.price;
+	}then{
+		//apparently it works even with 
+		//assert(new Match({Passenger: p ,Taxi : t}));
+		                
+        //matchFound(t,p);
+        notify(t,p);
+        notify(p,t);
+        if(t.person == p.person){
+        	Fiber(function(){retract(t)});
+        	console.log("match equal!");
+        }else{
+        	console.log("match less!");
+        	Fiber(function(){
+        		modify(t,function(){
+		            if(this.person <= 0 || p.person <= 0 )
+		            	debugger;
+		            this.person = this.person - p.person;
+		            if(this.person <= 0 || p.person <= 0 )
+		            	debugger;
+        		})
+        	}).run();
+        }
+        Fiber(function(){retract(p)});
 
-/* && p.destination == t.destination && sameDay(p.time,t.time) 
-		&& checkDistance(t.lat, t.long, p.lat,p.long,p.radius, t.radius) && p.price <= t.price; // || log(t,p,"lower"); */
+	}
+}
 
+/*
 rule matchingLowerSeats{
 	when{
 		t : Taxi ;
-		p : Passenger p.person < t.person; 
+		p : Passenger p.person < t.person && p.destination == t.destination && sameDay(p.time,t.time) 
+		&& checkDistance(t.lat, t.long, p.lat,p.long,p.radius, t.radius) && p.price <= t.price;// && log(t,p,"lower");
 	}then{
 		//assert(new Match({Passenger: p,Taxi : t));
 		console.log("match less!");                
@@ -148,37 +178,15 @@ rule matchingLowerSeats{
             	debugger;
         });
 		
-		/*assert(new Taxi({destination: t.destination,time: t.time,radius:t.radius,
-			person:(t.person - p.person),price:t.price,long:t.long,lat:t.lat,username:t.username,phone:t.phone}));
-		*/
 		
         notify(t,p);
         notify(p,t);
         //retract(t);
         retract(p);
 	}
-}
+}*/
 //u robably cannot factor our the commone behavior of the 2 then clauses because of scope (retract is called on...)?
-/* &&  p.destination == t.destination && sameDay(p.time,t.time) 	 && checkDistance(t.lat, t.long, p.lat,p.long,p.radius, t.radius) && p.price <= t.price; // || log(t,p,"equal"); */
-rule matchingEqualSeats{
-	when{
-		t : Taxi;
-		p : Passenger p.person == t.person;
-	}then{
-		if(p.person != t.person)
-			debugger;
-		//apparently it works even with 
-		//assert(new Match({Passenger: p ,Taxi : t}));
-		console.log("match equal!");                
-        //matchFound(t,p);
-        notify(t,p);
-        notify(p,t);
-        
-        retract(t);
-        retract(p);
 
-	}
-}
 
 //the retract of the passenger won't intefer with the modify (where we use p again), he does the same on the examples
 		//and probably it is because the retract still remove the fact from the working memory, but I still have a referencence to it

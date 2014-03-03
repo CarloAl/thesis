@@ -1,4 +1,5 @@
 var nools = require("./nools/index");
+//var nools = require('nools');
 var path = require('path');
 var http = require("http");
 var url = require("url");
@@ -171,7 +172,7 @@ function initNools(file,scope){
 	        }
 	    );
 	})*/
-	session.matchUntilHalt()
+	Fiber(function(){session.matchUntilHalt()
     .then(
         function(){
             console.log("\nmatch done");
@@ -179,7 +180,7 @@ function initNools(file,scope){
         function(err){
             console.log(err.stack);
         }
-    );
+    )}).run();
 	return session;
 
 }
@@ -187,6 +188,7 @@ function initNools(file,scope){
 function compile(scope,file){
 	var define = {};
 	scope.notify = notify;
+	scope.Fiber = Fiber;
 
 	//for(i = 0; i < templates.length; i++){
 		for(i in templates)
@@ -251,7 +253,7 @@ function addListener(type,ws,message){
 	listeners[type].push({ws: ws, filter: message.data.filter});
 }
 
-//send to all the listeners interested to templateId the new fact
+//send to all the listeners interested to templatelateId the new fact
 function sendToListeners(type,obj){
 	if(listeners[type] != undefined)
 		for(var i = 0; i < listeners[type].length; i++){
