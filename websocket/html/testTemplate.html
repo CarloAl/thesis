@@ -13,37 +13,26 @@
             
             //var type = document.getElementById('istaxi').checked?'taxi':"passenger"
             if(document.getElementById('istaxi').checked)
-                require("Taxi","Passenger",f);
+                require("Taxis","Passenger",f);
             else
                 require("Passenger","Taxi",f);
             // or u can require (Taxi) and send that 
-
 
 //            var f = function(){return arguments[0] == arguments[1];}
 
             //u cannot make typos here
             //look for sandbox on js on server
-            function f(Template){
-                var filter = function(taxi){ return taxi.destination == "VUB" && taxi.price == 3;}
+            function f(err,Template){
+                if(err)
+                    throw new Error(err);
+                else{
+                    var filter = {$and : [{'object.person' : { $gte : 3}}, { 'object.destination': 'VUB'}]};
+                    registerTo(Template,filter, function(message){
+                        console.log("received")
+                        console.log(message);
 
-
-  /*          obj = { 
-                destination : "VUB",
-                price : 3
-                //problem u could have alrady a field called ***Function, possibile solution: for every field have pair  (data,function)
-                //ex: destination: {data : "VUB",function : "return arguments[0] == arguments[1];"}
-                //destinationFunction: "return arguments[0] == arguments[1];"
-                //destinationFunction: f.toString() to string in the library
-                destinationFunction: "="
-                price : 3
-                pricefucntion ">"
-            }*/
-
-                registerTo(Template,filter, function(message){
-                    console.log("received")
-                    console.log(message);
-
-                });
+                    });
+                }
             }
             //mySend(obj,type);
 

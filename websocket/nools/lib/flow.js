@@ -32,9 +32,12 @@ module.exports = declare(EventEmitter, {
             extd.bindAll(this, "halt", "assert", "retract", "modify", "focus", "emit", "getFacts");
         },
 
-        getFacts: function (Type,cb) {
+        getFacts: function (Type,query,cb) {
             if (Type) {
-                this.workingMemory.getFactsByType(Type,cb);
+                if(query)
+                    this.workingMemory.getFactsByQuery(Type,query,cb);
+                else
+                    this.workingMemory.getFactsByType(Type,cb);
             } else {
                 this.workingMemory.getFacts(cb);
             }

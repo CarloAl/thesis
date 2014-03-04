@@ -33,9 +33,10 @@ function getObj (id,col,caller) {
         fiber.run(docs);
 
     });
-  var results = Fiber.yield();
-  return results;
+  var result = Fiber.yield();
+  return result;
 }
+
 function getCollection(obj){
     var mycollection;
     if(obj instanceof InitialFact)
@@ -83,6 +84,8 @@ declare({
             this.facts.clear();
         },
 
+
+
         getFacts: function (cb) {
             var collections = db.getCollectionNames(),
                 ret = [],
@@ -106,6 +109,15 @@ declare({
                     f(collections.length,docs);
                 });
             }
+        },
+
+
+        getFactsByQuery: function (Template,query,cb) {
+            var collection = getCollection(Template);
+            collection.find(query,function(err, doc){
+                cb(doc);
+            });
+
         },
 
         getFactsByType: function (Template,cb) {

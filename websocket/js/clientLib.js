@@ -4,6 +4,7 @@ var NEW_FACT = 0;
 var REGISTER_TEMPLATE = 1;
 var REQUIRE_TEMPLATE = 2;
 var ANSWER_TEMPLATE = 3;
+var ANSWER_TEMPLATE_NOT_FOUND = 4;
 
 
 var requireCb = [];
@@ -24,7 +25,7 @@ var idListener = 0;
 
     function registerTo(template, filter, cb){
         mySend({template: template.prototype.__type, 
-               filter: filter.toString() } , REGISTER_TEMPLATE/*,{template: template /*, idListener : idListener}*/);
+               filter: filter } , REGISTER_TEMPLATE/*,{template: template /*, idListener : idListener}*/);
         //addEventListener(idListener,cb)
         addEventListener(template.prototype.__type,cb);
         //idListener++;
@@ -56,7 +57,7 @@ var idListener = 0;
                     eval("Templates[i] = " + templatesString[i].template);
                     Templates[i].prototype.__type = templatesString[i].__type;
                 }
-                ws.customCallBack[type].apply(null,Templates);
+                ws.customCallBack[type].call(null,null,Templates); //the second null is the error
 
             }else{
                 ws.customCallBack[type](message.data);
@@ -72,7 +73,8 @@ var idListener = 0;
         for (var i = 0; i < arguments.length; i++) {
             if(typeof arguments[i] == "function"){
                 mySend(templates,REQUIRE_TEMPLATE);
-                addEventListener(ANSWER_TEMPLATE,arguments[i]);                
+                addEventListener(ANSWER_TEMPLATE,arguments[i]);
+                addEventListener(ANSWER_TEMPLATE_NOT_FOUND,arguments[i]);
             }else{
                 templates[i] = arguments[i];
             }
@@ -92,7 +94,9 @@ var idListener = 0;
         /*if(extra != 'undefined')
             for(i in extra)
                 message['__' + i] = extra [i];*/
+        
         var string = JSON.stringify({data: message, __type : messageType});
+
         ws.send(string);
         console.log('I am sending: ')
         console.log(message);

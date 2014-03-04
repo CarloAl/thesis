@@ -2,7 +2,8 @@ var nools = require("./nools/index");
 //var nools = require('nools');
 var path = require('path');
 var http = require("http");
-var url = require("url");
+var url = require("url"),
+	sift = require("sift");
 var fs = require('fs');
 
 var templateId = 0;
@@ -23,6 +24,7 @@ var REGISTER_TEMPLATE = 1;
 //value of the __type in a websocket message, indicate that the client is requesting a class template
 var REQUIRE_TEMPLATE = 2;
 var ANSWER_TEMPLATE = 3;
+var ANSWER_TEMPLATE_NOT_FOUND = 4;
 
 var WebSocketServer = require('ws').Server, 
 wss = new WebSocketServer({port: 8080});
@@ -197,50 +199,11 @@ function compile(scope,file){
 	return nools.compile(file,{define: define, scope: scope});
 }
 
-//given an array of facts and the conditions, as code to be executed on the facts, give back a subset of the facts that hold the conditions
-/*function filterOut(facts,conditions){
-	//filtered results
-	array = [];
-	filters = [];
-	filters["="] = function (){return arguments[0] == arguments[1];}
-	//for every fact of that type
-	for(var i = 0 ; i < facts.length; i++){
-		var ok = true;
-		//for every condtion
-		for(condition in conditions){
-			if(conditions[condition] != "" && condition.substring(0,2) !="__" && condition.indexOf("Function") < 0){ //i.e. it's filled out and it is not an extra paramter
-				//create a new function with the client code
-				if(conditions[condition+"Function"] in filters)
-					filterFunction = filters[conditions[condition+"Function"]];
-				else
-					//if u pass the body
-					//filterFunction = new Function(conditions[condition+"Function"]);
-
-					//if u passa a lambda
-					eval("var filterFunction = " + conditions[condition+"Function"])
-
-				value = filterFunction(facts[i][condition] , conditions[condition]);
-				ok = ok && value;
-			}
-		}
-		if(ok)
-			array.push(facts[i]);
-	}
-	return array;
-}
-*/
 
 //given an array of facts and the filter function, as string, give back a subset of the facts that hold the conditions
 function filterOut(facts,filter){
 	//filtered results
-	filteredFacts = [];
-	//for every fact of that type
-	for(var i = 0 ; i < facts.length; i++){
-		eval("var filterFunction = " + filter)
-		if(filterFunction(facts[i].object))
-			filteredFacts.push(facts[i].object);
-	}
-	return filteredFacts;
+	return sift(filter,facts);
 }
 
 
@@ -284,13 +247,11 @@ function dispatch(message,ws){
     	var template = getTemplateFromMessage(message);
 
     	var noolsTemplate = flow.getDefined(template);
-    	//get facts now is async cuz is a query to mongodb
-    	session.getFacts(noolsTemplate,function(facts){
-    		if(facts.length != 0){
-	    		facts = filterOut(facts,getFilterFromMessage(message));
-	    		if(facts.length > 0)
-	    			mySend(ws,facts,template);
-			}
+    	//get facts now is async because is a query to mongodb
+    	session.getFacts(noolsTemplate,getFilterFromMessage(message),function(facts){
+			if(facts.length > 0)
+    			mySend(ws,facts,template);
+			
     	});
     	
 		addListener(template,ws,message);
@@ -314,10 +275,17 @@ function dispatch(message,ws){
 				var templatesName = message.data;
 
 				var answerTemplates = [];
+				var err = false;
 				for(var i = 0 ; i < templatesName.length; i++){
-					var Template = templates[templatesName[i]];
-					answerTemplates.push({'template': Template.toString(), '__type': Template.__type});
+					if(templates[templatesName[i]] == undefined)
+						err = "Template " + templatesName[i] + " not present in the server.";
+					else{
+						var Template = templates[templatesName[i]];
+						answerTemplates.push({'template': Template.toString(), '__type': Template.__type});
+					}
 				}
+				if(err)
+					mySend(ws,err,ANSWER_TEMPLATE_NOT_FOUND);	
 				mySend(ws,answerTemplates,ANSWER_TEMPLATE);
 
 			}
