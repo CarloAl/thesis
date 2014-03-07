@@ -219,6 +219,7 @@ var Rule = declare({
             var ret = new Promise(), cb = this.cb;
             try {
                 if (cb.length === 3) {
+                    debugger;
                     cb.call(flow, match.factHash, flow, ret.resolve);
                 } else {
                     ret = cb.call(flow, match.factHash, flow);

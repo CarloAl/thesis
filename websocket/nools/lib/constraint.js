@@ -54,6 +54,8 @@ Constraint.extend({
         },
 
         "assert": function (param) {
+            if(param == undefined)
+                debugger;
             return param instanceof this.constraint || param.constructor === this.constraint;
         },
 

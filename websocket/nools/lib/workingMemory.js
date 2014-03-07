@@ -18,23 +18,31 @@ var declare = require("declare.js"),
     return mycollection;
 }*/
 
-function getObj (id,col,caller) {
-  var fiber = Fiber.current;
-  
-  //findOne is broken
+
+//async > 0
+
+
+
+function getObj(id,col,caller,cb) {
+//  var fiber = Fiber.current;
+
+
   col.findOne(
     {"object.objectId" : id},function(err,docs){
         console.log(caller);
         if(err) throw new Error(err);
-        if(docs == null || docs == undefined)
+        if(docs == null || docs == undefined){
             throw new Error ("couldn't find fact with id " + id);
-        if(fiber == undefined)
             debugger;
-        fiber.run(docs);
+        }
+        //if(fiber == undefined)
+          //  debugger;
+        //fiber.run(docs);
+        cb(docs);
 
     });
-  var result = Fiber.yield();
-  return result;
+  //var result = Fiber.yield();
+  //return result;
 }
 
 function getCollection(obj){
@@ -141,76 +149,58 @@ declare({
                 result.recency = this.recency ++ ;
             }
             return result;
-                /*,function(err,doc){
-                if(doc)
-                    cb(doc);
-                else{
-                    var obj = new Fact(o);
-                    obj.recency = recency ++ ;
-                }
-            })
-            /*while ((head = head.next)) {
-                var existingFact = head.data;
-                if (existingFact.equals(o)) {
-                    return existingFact;
-                }
-            }
-            if (!ret) {
-                ret = new Fact(o);
-                ret.recency = this.recency++;
-                //this.facts.push(ret);
-            }
-            return ret;*/
         },
 
-        modifyFact: function (fact) {
+        modifyFact: function (fact,cb) {
+            var that = this;
             var mycollection = getCollection(fact);
-            var obj = getObj(fact.objectId,mycollection,"modifyFact");
+            getObj(fact.objectId,mycollection,"modifyFact",function(obj){
             //obj is the object retrieved from the database, while fact is the updated version, so we update also obj and
             //then we store it in the databse
-            obj.object = fact;
-            mycollection.findAndModify({
-                query: { _id : obj._id },
-                update: obj }, function(err, doc, lastErrorObject) {
-                    if(err) throw new Error("the fact to modify does not exist");
-                });
-            
-            return obj;
-            /*while ((head = head.next)) {
-                var existingFact = head.data;
-                if (existingFact.equals(fact)) {
-                    existingFact.recency = this.recency++;
-                    return existingFact;
-                }
-            }*/
-            //if we made it here we did not find the fact
+                fact.recency = that.recency++
+                obj.object = fact;
+                mycollection.findAndModify({
+                    query: { _id : obj._id },
+                    update: obj }, function(err, doc, lastErrorObject) {
+                        if(err) throw new Error("the fact to modify does not exist");
+                        cb(obj)
+                    });
+                
+            });
             
         },
 
-        assertFact: function (fact) {
+        assertFact: function (fact,cb,flow) {
             var ret = new Fact(fact);
-
             ret.recency = this.recency++;
-
             var mycollection = getCollection(fact);
+            var that = this;
             var t = mycollection.insert(ret,function(err,value){
                 if(err) throw new Error(err);
+
+                //when u assert the initial fact there's no cb
+                if(cb != undefined)
+                    cb(value._id);
+                flow.emit("assert", fact);
+
             });
             return ret;
         },
 
-        retractFact: function (fact) {
+        retractFact: function (fact,cb) {
             var mycollection = getCollection(fact);
-            var obj = getObj(fact.objectId,mycollection,"retractFact");
+            var obj = getObj(fact.objectId,mycollection,"retractFact",function(obj){
             //when u retrieve obj from mongodb the obj.object.constructor is for some reason changed and the retract and modify on
             //the rete graph don't work, so we restore the original fact.
-            obj.object = fact;
+                obj.object = fact;
 
-            mycollection.remove({ _id : obj._id},function(err,docs,laster){
-                if(docs.n <= 0)
-                    throw new Error("the fact to remove does not exist");
+                mycollection.remove({ _id : obj._id},function(err,docs,laster){
+                    if(docs.n <= 0)
+                        throw new Error("the fact to remove does not exist");
+                });
+                cb(obj);
             });
-            return obj;
+            return fact;
 
         }
     }

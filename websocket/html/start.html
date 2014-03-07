@@ -25,13 +25,9 @@
             document.getElementById('response').innerHTML += string; 
         };
 
-        function sendSocket(){
-            if(document.getElementById('istaxi').checked)
-                addEventListener('passenger',matchFound);
-            else
-                addEventListener('taxi',matchFound);
-            //recupare the data from the form to assert a new fact
-            var obj = { 
+
+        function getObj(){
+            return { 
                 destination: document.getElementById('destination').value,
                 person: parseInt(document.getElementById('passenger').value),
                 price: parseInt(document.getElementById('price').value),
@@ -41,8 +37,16 @@
                 username: document.getElementById('username').value,
                 phone: document.getElementById('number').value, 
                 time: document.getElementById('time').value 
-                //__templateId : document.getElementById('istaxi').checked?'0':'1'
-            }
+            };
+        }
+        function sendSocket(){
+            
+            if(document.getElementById('istaxi').checked)
+                addEventListener('passenger',matchFound);
+            else
+                addEventListener('taxi',matchFound);
+            //recupare the data from the form to assert a new fact
+            var obj = getObj();
 
 
             /* the way I d want it:
@@ -57,20 +61,29 @@
 
 
 
-            var f = function(Template){
-                    var fact = new Template(obj);
-                    sendNewFact(fact);        
+            var f = function(err,Template){
+                    if(err)
+                        throw new Error(err);
+                    else{
+                        var fact = new Template(obj);
+                        sendNewFact(fact);        
+                    }
                 }
 
             if(document.getElementById('istaxi').checked)
-                //require ask for the definition of one or more "class" to the server. Last paramenter is the callback
-
+                //require ask for the definition of one or more "class" to the server. Last paramenter is the callbac
                 require("Taxi","Passenger",f);//add erro
             else
                 require("Passenger","Taxi",f);
             
+            document.getElementById('button').textContent = "Update"
+            document.getElementById('button').onclick = update();
+        }
 
 
+        function update(){
+            var obj = getObj();
+            lib.sendUpdate(obj);
         }
     </script>
     
@@ -95,7 +108,7 @@
             Longitude: <input type='number' name='longitude' id='longitude' value=52.12><br>
             Leaving time: <input type='time' name='time' id='time' value="14:32"><br>
             Phone number: <input type='number' name='number' id='number' value="04756323"><br>
-            <button class="btn btn-lg btn-primary btn-block" type="button" onclick="sendSocket()">Submit</button>
+            <button class="btn btn-lg btn-primary btn-block" type="button" onclick="sendSocket()" id="button">Submit</button>
         </form>
 
         <div id='response'>

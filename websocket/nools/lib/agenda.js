@@ -6,6 +6,7 @@ var extd = require("./extended"),
     isPromise = extd.isPromiseLike,
     EventEmitter = require("events").EventEmitter;
 
+var globalPromise;
 
 var FactHash = declare({
     instance: {
@@ -111,6 +112,7 @@ module.exports = declare(EventEmitter, {
                 var activation = this.pop();
                 this.emit("fire", activation.rule.name, activation.match.factHash);
                 var fired = activation.rule.fire(this.flow, activation.match);
+
                 if (isPromise(fired)) {
                     ret = fired.then(function () {
                         //return true if an activation fired

@@ -5,9 +5,11 @@ var REGISTER_TEMPLATE = 1;
 var REQUIRE_TEMPLATE = 2;
 var ANSWER_TEMPLATE = 3;
 var ANSWER_TEMPLATE_NOT_FOUND = 4;
+var NEW_FACT_ID = 5; 
+var UPDATE_FACT = 6;
 
 
-var requireCb = [];
+var fact; 
 
 var objectId = 0
 
@@ -57,7 +59,7 @@ var idListener = 0;
                     eval("Templates[i] = " + templatesString[i].template);
                     Templates[i].prototype.__type = templatesString[i].__type;
                 }
-                ws.customCallBack[type].call(null,null,Templates); //the second null is the error
+                ws.customCallBack[type].apply(null,[null].concat(Templates)); //the second null is the error
 
             }else{
                 ws.customCallBack[type](message.data);
@@ -102,11 +104,21 @@ var idListener = 0;
         console.log(message);
     }
 
+function sendUpdate(obj){
+    mySend(fact,UPDATE_FACT);
+}
 
-function sendNewFact(fact){
-    fact.__type = fact.__proto__.__type;
-    fact.__templateId = fact.__proto__.__templateId;
+
+function saveId(id){
+    fact._id = id;
+}
+
+function sendNewFact(newFact){
+    newFact.__type = newFact.__proto__.__type;
+    newFact.__templateId = newFact.__proto__.__templateId;
+    fact = newFact;
     mySend(fact,NEW_FACT);
+    addEventListener(NEW_FACT_ID,saveId)
 }
 
 

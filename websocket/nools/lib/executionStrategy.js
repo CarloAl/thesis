@@ -1,7 +1,15 @@
 var extd = require("./extended"),
     Promise = extd.Promise,
+    Fiber = require('fibers'),
     nextTick = require("./nextTick"),
     isPromiseLike = extd.isPromiseLike;
+
+/*
+current scenario where doesn't work:
+I fire a rule in a fiber, when it does the query it yelds,
+it fire and other rule, yeld, finish the first query, and the second rule has an inconsistent state
+
+*/
 
 Promise.extend({
     instance: {
@@ -14,7 +22,7 @@ Promise.extend({
             this.agenda = flow.agenda;
             this.rootNode = flow.rootNode;
             this.matchUntilHalt = !!(matchUntilHalt);
-            extd.bindAll(this, ["onAlter", "callNext"]);
+            extd.bindAll(this, ["onAlter", "callNext","setLooping"]);
         },
 
         halt: function () {
@@ -25,10 +33,16 @@ Promise.extend({
         },
 
         onAlter: function () {
-            this.flowAltered = true;
-            if (!this.looping && this.matchUntilHalt && !this.__halted) {
-                this.callNext();
-            }
+            //Fiber(function(){
+                this.flowAltered = true;
+                if (!this.looping && this.matchUntilHalt && !this.__halted) {
+                    this.callNext();
+                }
+            //}).run();
+        },
+
+        setLooping: function(l){
+            this.looping = l;
         },
 
         setup: function () {
@@ -49,7 +63,7 @@ Promise.extend({
         __handleAsyncNext: function (next) {
             var self = this, agenda = self.agenda;
             return next.then(function () {
-                self.looping = false;
+                self.looping = self.flow.getAsyncAction() > 0 ? true: false;
                 if (!agenda.isEmpty()) {
                     if (self.flowAltered) {
                         self.rootNode.incrementCounter();
@@ -68,7 +82,7 @@ Promise.extend({
         },
 
         __handleSyncNext: function (next) {
-            this.looping = false;
+            this.looping = this.flow.getAsyncAction() > 0 ? true: false;
             if (!this.agenda.isEmpty()) {
                 if (this.flowAltered) {
                     this.rootNode.incrementCounter();
@@ -90,14 +104,19 @@ Promise.extend({
 
 
         callNext: function () {
-            this.looping = true;
-            var next = this.agenda.fireNext();
-            return isPromiseLike(next) ? this.__handleAsyncNext(next) : this.__handleSyncNext(next);
+            if(!this.looping){
+                this.looping = true;
+                var next = this.agenda.fireNext();
+                return isPromiseLike(next) ? this.__handleAsyncNext(next) : this.__handleSyncNext(next);
+            }
         },
 
         execute: function () {
             this.setup();
-            this.callNext();
+            var that = this;
+            //Fiber(function(){
+                that.callNext();
+            //}).run();
             return this;
         }
     }

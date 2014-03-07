@@ -118,11 +118,6 @@ rule test {
 	}
 }*/
 
-/*&& dateCmp(p.time , t.time) < 0 && p.person <= t.person
-		    && checkDistance(t.lat, t.long, p.lat,p.long,Math.min(p.radius,t.radius)) 
-		    && p.price <= t.price ;*/
-
-		    /*&& dateCmp(p.time ,t.time) <= 0*/
 
 rule matchingEqualSeats{
 	when{
@@ -131,28 +126,36 @@ rule matchingEqualSeats{
 		&& checkDistance(t.lat, t.long, p.lat,p.long,p.radius, t.radius) && p.price <= t.price;
 	}then{
 		//apparently it works even with 
-		//assert(new Match({Passenger: p ,Taxi : t}));
-		                
+		//assert(new Match({Passenger: p ,Taxi : t}));	   
         //matchFound(t,p);
         notify(t,p);
         notify(p,t);
+        if( p.person > t.person ){
+        	debugger;
+        }
+
         if(t.person == p.person){
-        	Fiber(function(){retract(t)});
+        	Fiber(function(){
+        		retract(t);
+        	}).run();
         	console.log("match equal!");
         }else{
         	console.log("match less!");
         	Fiber(function(){
-        		modify(t,function(){
-		            if(this.person <= 0 || p.person <= 0 )
-		            	debugger;
-		            this.person = this.person - p.person;
-		            if(this.person <= 0 || p.person <= 0 )
-		            	debugger;
-        		})
-        	}).run();
+    		modify(t,function(){
+	            if(this.person <= 0 || p.person <= 0 )
+	            	debugger;
+	            this.person = this.person - p.person;
+	            this.modified = true;
+	            if(this.person <= 0 || p.person <= 0 )
+	            	debugger;
+    		});
+    		}).run();
+        	
         }
-        Fiber(function(){retract(p)});
-
+        Fiber(function(){
+        	retract(p);
+        }).run();
 	}
 }
 

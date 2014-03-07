@@ -23,9 +23,14 @@ var NEW_FACT = 0;
 var REGISTER_TEMPLATE = 1;
 //value of the __type in a websocket message, indicate that the client is requesting a class template
 var REQUIRE_TEMPLATE = 2;
+//value of the __type in a websocket message, when the server answer with the template
 var ANSWER_TEMPLATE = 3;
+//value of the __type in a websocket message, when there's no such template
 var ANSWER_TEMPLATE_NOT_FOUND = 4;
-
+//value of the __type in a websocket message, when the server answer a new fact with the new ID
+var NEW_FACT_ID = 5; 
+//value of the __type in a websocket message, when the client send an update
+var UPDATE_FACT = 6;
 var WebSocketServer = require('ws').Server, 
 wss = new WebSocketServer({port: 8080});
 
@@ -174,7 +179,8 @@ function initNools(file,scope){
 	        }
 	    );
 	})*/
-	Fiber(function(){session.matchUntilHalt()
+	//Fiber(function(){
+		session.matchUntilHalt()
     .then(
         function(){
             console.log("\nmatch done");
@@ -182,7 +188,8 @@ function initNools(file,scope){
         function(err){
             console.log(err.stack);
         }
-    )}).run();
+    );
+	//}).run();
 	return session;
 
 }
@@ -256,7 +263,7 @@ function dispatch(message,ws){
     	
 		addListener(template,ws,message);
     }else{
-    	if( type == NEW_FACT){
+    	if(type == NEW_FACT){
     		var templateName = getTemplateNameFromMessage(message)
 		    if((index = indexofTemplatebyName(templateName)) == -1){
 				throw "template not present in the list of template";
@@ -266,7 +273,8 @@ function dispatch(message,ws){
 				//if(templates[index].automaticallyAsserted)
 				//save the websocket for a possible answer 
 				webSockets[obj.objectId] = ws;
-				myAssert(obj);
+				var cb = sendId(ws);
+				myAssert(obj,cb);
 				checkCBandCall(ws.customCallBack[type],obj);
 			}
 		}else{
@@ -294,8 +302,15 @@ function dispatch(message,ws){
 	}
 }
 
+function sendId(ws){
+	return function(id){
+		mySend(ws,id,NEW_FACT_ID);
+	}
+
+}
+
 //nools session
-function myAssert(fact){
+function myAssert(fact,cb){
 
 	if((index = indexofTemplatebyName(fact.__type)) == -1){
 		throw "template not present in the list of template";
@@ -306,14 +321,18 @@ function myAssert(fact){
 		asserted = new Template(fact);*/
 		if(fact.person <= 0)
 					debugger;
-		asserted = session.assert(fact);		
+		asserted = session.assert(fact, cb);		
 	}
 	return asserted;
 
 }
+
+var countMatches = 0;
 //@target and @message are two instance of 2 (or the same) templates
 //notify the sender of the obj target with message
 function notify(target,message){
+	
+	console.log(++countMatches);
 	if(typeof webSockets[target.objectId] == 'undefined')
 		throw "no websocket associated to " + target;
 	else{
@@ -336,7 +355,9 @@ function onConnection(wss,cb){
 	ws.customCallBack = [];
 	
 	ws.on('message', function(message) {       
-        Fiber(function(){dispatch(message,ws)}).run();
+        //Fiber(function(){
+        	dispatch(message,ws);
+        //})    .run();
     });
 
 	//not called anymore

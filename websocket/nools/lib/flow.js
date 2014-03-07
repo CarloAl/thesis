@@ -7,7 +7,22 @@ var extd = require("./extended"),
     wm = require("./workingMemory"),
     WorkingMemory = wm.WorkingMemory,
     ExecutionStragegy = require("./executionStrategy"),
+    Fiber = require('fibers'),
+    promise = require("promise-extended"),
+    nextTick = require("./nextTick"),
     AgendaTree = require("./agenda");
+
+var globalPromise = undefined;
+var functions = [];
+var nDone = 0;
+
+function done(){
+    if(++nDone == functions.length){
+        globalPromise.callback();
+    }
+    functions = [];
+    nDone = 0;
+}
 
 
 
@@ -19,6 +34,8 @@ module.exports = declare(EventEmitter, {
 
         executionStrategy: null,
 
+        asyncAction: 0,
+
         constructor: function (name, conflictResolutionStrategy) {
             this.env = null;
             this.name = name;
@@ -29,7 +46,7 @@ module.exports = declare(EventEmitter, {
             this.agenda.on("fire", bind(this, "emit", "fire"));
             this.agenda.on("focused", bind(this, "emit", "focused"));
             this.rootNode = new nodes.RootNode(this.workingMemory, this.agenda);
-            extd.bindAll(this, "halt", "assert", "retract", "modify", "focus", "emit", "getFacts");
+            extd.bindAll(this, "halt", "assert", "retract", "modify", "focus", "emit", "getFacts","increaseNumberAsyncAction","getAsyncAction","done");
         },
 
         getFacts: function (Type,query,cb) {
@@ -62,30 +79,99 @@ module.exports = declare(EventEmitter, {
             this.rootNode.dispose();
         },
 
-        assert: function (fact) {
-            this.rootNode.assertFact(this.workingMemory.assertFact(fact));
-            this.emit("assert", fact);
+        assert: function (fact,cb) {
+            var that = this;
+            //Fiber(function(){
+                that.rootNode.assertFact(that.workingMemory.assertFact(fact,cb,that));
+            //}).run();
+            return fact;
+        },
+
+        setGlobalPromise: function (){
+            agenda.setGlobalPromise(globalPromise);
+        },
+
+        increaseNumberAsyncAction: function(){
+            this.asyncAction++;
+        },
+
+        getAsyncAction: function(){
+            return this.asyncAction;
+        },
+
+        done: function(){
+            this.asyncAction--;
+            if(this.asyncAction == 0){
+                this.executionStrategy.setLooping(false);
+                this.executionStrategy.onAlter(); //add next tick
+            }
+        },
+
+        retract: function (fact) {
+            //fact = this.workingMemory.getFact(fact);
+            
+            var that = this;
+            this.increaseNumberAsyncAction();
+            that.workingMemory.retractFact(fact,function(fact){
+                that.rootNode.retractFact(fact);
+                that.emit("retract", fact);
+                that.done();
+            });
+        
             return fact;
         },
 
         // This method is called to remove an existing fact from working memory
-        retract: function (fact) {
+        _retract: function (fact) {
             //fact = this.workingMemory.getFact(fact);
-            this.rootNode.retractFact(this.workingMemory.retractFact(fact));
+            var that = this;
+            //if (Fiber.current){
+                that.rootNode.retractFact(that.workingMemory.retractFact(fact));
+                that.emit("retract", fact);
+                return fact;
+            /*}else{
+                Fiber(function(){
+                    that.rootNode.retractFact(that.workingMemory.retractFact(fact));
+                    that.emit("retract", fact);
+                    return fact;
+                }).run();*/
+            
+
+            /*this.rootNode.retractFact(this.workingMemory.retractFact(fact));
             this.emit("retract", fact);
-            return fact;
+            return fact;*/
         },
 
+
+        modify: function (fact, cb) {
+            if ("function" === typeof cb) {
+                cb.call(fact, fact);
+            }
+            var that = this;
+            that.workingMemory.modifyFact(fact,function(fact){
+                that.rootNode.modifyFact(fact);
+                that.emit("modify", fact);
+                return fact;
+            });
+            return fact;
+        },
         // This method is called to alter an existing fact.  It is essentially a
         // retract followed by an assert.
-        modify: function (fact, cb) {
-            //fact = this.workingMemory.getFact(fact);
-            if ("function" === typeof cb) {
+        _modify: function (fact) {
+            
+            var that = this;
+            
+                that.rootNode.modifyFact(that.workingMemory.modifyFact(fact));
+                that.emit("modify", fact);
+                return fact;
+            //}).run();
+            /*if ("function" === typeof cb) {
                 cb.call(fact, fact);
             }
             this.rootNode.modifyFact(this.workingMemory.modifyFact(fact));
             this.emit("modify", fact);
-            return fact;
+            return fact;*/
+
         },
 
         print: function () {
