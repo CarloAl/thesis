@@ -22,7 +22,7 @@ Promise.extend({
             this.agenda = flow.agenda;
             this.rootNode = flow.rootNode;
             this.matchUntilHalt = !!(matchUntilHalt);
-            extd.bindAll(this, ["onAlter", "callNext","setLooping"]);
+            extd.bindAll(this, ["onAlter", "callNext","setLooping","isLooping"]);
         },
 
         halt: function () {
@@ -39,6 +39,10 @@ Promise.extend({
                     this.callNext();
                 }
             //}).run();
+        },
+
+        isLooping: function(){
+            return this.looping;
         },
 
         setLooping: function(l){
@@ -113,10 +117,7 @@ Promise.extend({
 
         execute: function () {
             this.setup();
-            var that = this;
-            //Fiber(function(){
-                that.callNext();
-            //}).run();
+            this.callNext();
             return this;
         }
     }

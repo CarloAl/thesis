@@ -5,8 +5,11 @@
     <script type="text/javascript" src="/js/clientLib.js"></script>
     <script type= 'text/javascript'>
 
-
-
+    var lat, long;
+    function getCoord(position){
+        lat = position.coords.latitude;
+        long = position.coords.longitude;
+    }
 
         //var connection = myWebSocket('ws://127.0.0.1:8080');
         //connection.onopen = function () {console.log("Websocket open");};
@@ -18,6 +21,11 @@
 
         //mylib.onEvent('myevent',callback)
 
+        if (navigator.geolocation){
+            navigator.geolocation.getCurrentPosition(getCoord);
+        }else{
+            document.getElementById('response').innerHTML = "Geolocation is not supported by this browser.";
+        }
 
 
         function matchFound(data) {
@@ -31,9 +39,9 @@
                 destination: document.getElementById('destination').value,
                 person: parseInt(document.getElementById('passenger').value),
                 price: parseInt(document.getElementById('price').value),
-                radius: parseInt(document.getElementById('radius').value),
-                lat: parseInt(document.getElementById('latitude').value),
-                long: parseInt(document.getElementById('longitude').value),
+                radiodius: parseInt(document.getElementById('radius').value),
+                //lat: parseInt(document.getElementById('latitude').value),
+                //long: parseInt(document.getElementById('longitude').value),
                 username: document.getElementById('username').value,
                 phone: document.getElementById('number').value, 
                 time: document.getElementById('time').value 
@@ -77,13 +85,13 @@
                 require("Passenger","Taxi",f);
             
             document.getElementById('button').textContent = "Update"
-            document.getElementById('button').onclick = update();
+            document.getElementById('button').onclick = update;
         }
 
 
         function update(){
             var obj = getObj();
-            lib.sendUpdate(obj);
+            sendUpdate(obj);
         }
     </script>
     
@@ -104,8 +112,8 @@
                         <option value=4>4</option>
                    </select> <br> -->
             Radius[km]: <input type='number' name='radius' id='radius' value=3><br>
-            Latitude: <input type='number' name='latitude' id='latitude' value=7.39><br>
-            Longitude: <input type='number' name='longitude' id='longitude' value=52.12><br>
+            <!-- Latitude: <input type='number' name='latitude' id='latitude' value=7.39><br>
+            Longitude: <input type='number' name='longitude' id='longitude' value=52.12><br> -->
             Leaving time: <input type='time' name='time' id='time' value="14:32"><br>
             Phone number: <input type='number' name='number' id='number' value="04756323"><br>
             <button class="btn btn-lg btn-primary btn-block" type="button" onclick="sendSocket()" id="button">Submit</button>

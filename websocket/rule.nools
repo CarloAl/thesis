@@ -121,9 +121,9 @@ rule test {
 
 rule matchingEqualSeats{
 	when{
-		t : Taxi;
-		p : Passenger p.person <= t.person &&  p.destination == t.destination && sameDay(p.time,t.time) 
-		&& checkDistance(t.lat, t.long, p.lat,p.long,p.radius, t.radius) && p.price <= t.price;
+		t : Taxi {destination: tDest, person: tPers, time: tTime, lat: tLat, long: tLong, radius: tRadius, price: tPrice};
+		p : Passenger p.person <= tPers &&  p.destination == tDest && sameDay(p.time,tTime) 
+		&& checkDistance(tLat, tLong, p.lat,p.long,p.radius, tRadius) && p.price <= tPrice;
 	}then{
 		//apparently it works even with 
 		//assert(new Match({Passenger: p ,Taxi : t}));	   
@@ -135,27 +135,20 @@ rule matchingEqualSeats{
         }
 
         if(t.person == p.person){
-        	Fiber(function(){
-        		retract(t);
-        	}).run();
+        	retract(t);
         	console.log("match equal!");
         }else{
         	console.log("match less!");
-        	Fiber(function(){
-    		modify(t,function(){
-	            if(this.person <= 0 || p.person <= 0 )
-	            	debugger;
-	            this.person = this.person - p.person;
-	            this.modified = true;
-	            if(this.person <= 0 || p.person <= 0 )
-	            	debugger;
-    		});
-    		}).run();
-        	
+      		modify(t,function(){
+  	            if(this.person <= 0 || p.person <= 0 )
+  	            	debugger;
+  	            this.person = this.person - p.person;
+  	            if(this.person <= 0 || p.person <= 0 )
+  	            	debugger;
+      		});
         }
-        Fiber(function(){
-        	retract(p);
-        }).run();
+      	retract(p);
+        //assert(Match(t,p));
 	}
 }
 

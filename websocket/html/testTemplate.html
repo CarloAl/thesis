@@ -13,23 +13,21 @@
             
             //var type = document.getElementById('istaxi').checked?'taxi':"passenger"
             if(document.getElementById('istaxi').checked)
-                require("Taxi","Passenger",f);
+                require("Taxi",f);
             else
-                require("Passenger","Taxi",f);
-            // or u can require (Taxi) and send that 
+                require("Passenger",f);
 
-//            var f = function(){return arguments[0] == arguments[1];}
-
-            //u cannot make typos here
-            //look for sandbox on js on server
-            function f(err,Template){
+            function f(err,TemplateTaxi){
                 if(err)
                     throw new Error(err);
                 else{
+                    
                     var filter = {$and : [{'object.person' : { $gte : 3}}, { 'object.destination': 'VUB'}]};
-                    registerTo(Template,filter, function(message){
+                    //var filter = Template.person == 3 && Template.destination = 'VUB';
+                    var listener = registerTo(TemplateTaxi,filter, function(message){
                         console.log("received")
                         console.log(message);
+                        listener.drop();
 
                     });
                 }

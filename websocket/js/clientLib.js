@@ -7,15 +7,24 @@ var ANSWER_TEMPLATE = 3;
 var ANSWER_TEMPLATE_NOT_FOUND = 4;
 var NEW_FACT_ID = 5; 
 var UPDATE_FACT = 6;
+var DROP_REGISTRATION = 7;
+var RETRACT_FACT = 8;
 
+var factId = 0
+var fact;
+var idListener = 0;
+var objectId = 0;
 
-var fact; 
+function Listener(id,type){
+    this.idListener = id;
+    this.type = type;
+    this.drop = dropListener;
+}
 
-var objectId = 0
-
-var toRemove;
+function dropListener(){
+    mySend({id: this.idListener, type : this.type} , DROP_REGISTRATION);
+}
 //automatically generated variable used to assocate every listener 
-
 var idListener = 0;
 //function myWebSocket(address){
     ws = new WebSocket(address);
@@ -26,11 +35,13 @@ var idListener = 0;
     //the right callback
 
     function registerTo(template, filter, cb){
-        mySend({template: template.prototype.__type, 
-               filter: filter } , REGISTER_TEMPLATE/*,{template: template /*, idListener : idListener}*/);
+        idListener++;
+        var type = template.prototype.__type;
+        mySend({template: type, 
+               filter: filter ,id: idListener} , REGISTER_TEMPLATE);
         //addEventListener(idListener,cb)
         addEventListener(template.prototype.__type,cb);
-        //idListener++;
+        return new Listener(idListener, type);
     }
 
 
@@ -104,13 +115,24 @@ var idListener = 0;
         console.log(message);
     }
 
-function sendUpdate(obj){
+function sendUpdate(update){
+    //fact.mongoId = factId;
+    for(i in update){
+        fact[i] = update[i];
+    }
     mySend(fact,UPDATE_FACT);
 }
 
 
-function saveId(id){
-    fact._id = id;
+function saveId(ids){
+//    factId = id;
+    fact._id = ids._id;
+    //fact.objectId = ids.objectId;
+    //fact.id = ids.id;
+}
+
+function retractFact(){
+	mySend({id:fact._id, type: fact.__type} ,RETRACT_FACT);
 }
 
 function sendNewFact(newFact){

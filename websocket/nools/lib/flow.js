@@ -12,20 +12,6 @@ var extd = require("./extended"),
     nextTick = require("./nextTick"),
     AgendaTree = require("./agenda");
 
-var globalPromise = undefined;
-var functions = [];
-var nDone = 0;
-
-function done(){
-    if(++nDone == functions.length){
-        globalPromise.callback();
-    }
-    functions = [];
-    nDone = 0;
-}
-
-
-
 module.exports = declare(EventEmitter, {
 
     instance: {
@@ -46,7 +32,8 @@ module.exports = declare(EventEmitter, {
             this.agenda.on("fire", bind(this, "emit", "fire"));
             this.agenda.on("focused", bind(this, "emit", "focused"));
             this.rootNode = new nodes.RootNode(this.workingMemory, this.agenda);
-            extd.bindAll(this, "halt", "assert", "retract", "modify", "focus", "emit", "getFacts","increaseNumberAsyncAction","getAsyncAction","done");
+            extd.bindAll(this, "halt", "assert", "retract", "modify", "focus", "emit", "getFacts",
+                "increaseNumberAsyncAction","getAsyncAction","done","modifyByMongoId");
         },
 
         getFacts: function (Type,query,cb) {
@@ -81,6 +68,7 @@ module.exports = declare(EventEmitter, {
 
         assert: function (fact,cb) {
             var that = this;
+            this.increaseNumberAsyncAction();
             //Fiber(function(){
                 that.rootNode.assertFact(that.workingMemory.assertFact(fact,cb,that));
             //}).run();
@@ -93,6 +81,12 @@ module.exports = declare(EventEmitter, {
 
         increaseNumberAsyncAction: function(){
             this.asyncAction++;
+            //if I call a modify or retract from outside nools, I need to prevent that some rule fire while I update
+            //the db
+            //could be that I am already looping and then I could have an incosistency if for example I try to retract from
+            //outside a fact that is being modifying by nools.
+            //if(!this.executionStrategy.isLooping())
+              //  this.executionStrategy.setLooping(true);
         },
 
         getAsyncAction: function(){
@@ -101,10 +95,20 @@ module.exports = declare(EventEmitter, {
 
         done: function(){
             this.asyncAction--;
-            if(this.asyncAction == 0){
+            console.log(this.asyncAction);
+            if(this.asyncAction <= 0){
+                this.asyncAction = 0;
                 this.executionStrategy.setLooping(false);
-                this.executionStrategy.onAlter(); //add next tick
+             //   this.executionStrategy.onAlter(); //add next tick
             }
+        },
+
+        retractByMongoId: function(id,type){
+            var that = this;
+            this.increaseNumberAsyncAction();
+            that.workingMemory.retractFactByMongoId(id,type,function(fact){
+                that.retractFromMemory(that,fact);
+            });
         },
 
         retract: function (fact) {
@@ -114,64 +118,68 @@ module.exports = declare(EventEmitter, {
             this.increaseNumberAsyncAction();
             that.workingMemory.retractFact(fact,function(fact){
                 that.rootNode.retractFact(fact);
-                that.emit("retract", fact);
+                
                 that.done();
+                that.emit("retract", fact);
             });
         
             return fact;
         },
 
-        // This method is called to remove an existing fact from working memory
-        _retract: function (fact) {
-            //fact = this.workingMemory.getFact(fact);
-            var that = this;
-            //if (Fiber.current){
-                that.rootNode.retractFact(that.workingMemory.retractFact(fact));
+        retractFromMemory: function(that,fact){
+            //node is single threaded
+            debugger;
+            if(!that.executionStrategy.isLooping()){
+                that.executionStrategy.setLooping(true);
+                that.rootNode.retractFact(fact);
+                that.done();
+                that.executionStrategy.setLooping(false);
                 that.emit("retract", fact);
+                nextTick(that.executionStrategy.onAlter);
                 return fact;
-            /*}else{
-                Fiber(function(){
-                    that.rootNode.retractFact(that.workingMemory.retractFact(fact));
-                    that.emit("retract", fact);
-                    return fact;
-                }).run();*/
-            
+            }else{
+                nextTick(function(){that.helper(that,fact)});
+            }
+        },
+        // This method is called to remove an existing fact from working memory
 
-            /*this.rootNode.retractFact(this.workingMemory.retractFact(fact));
-            this.emit("retract", fact);
-            return fact;*/
+        
+        modifyByMongoId: function (fact) {
+            var that = this;
+            this.increaseNumberAsyncAction();
+            that.workingMemory.modifyFactByMongoId(fact,function(mongoFact){
+                  that.helper(that,mongoFact);
+            });
+            return fact;
         },
 
+        helper: function(that,fact){
+            if(!that.executionStrategy.isLooping()){
+                that.executionStrategy.setLooping(true);
+                that.rootNode.modifyFact(fact);
+                that.done();
+                that.executionStrategy.setLooping(false);
+                that.emit("modify", fact);
+                nextTick(that.executionStrategy.onAlter);
+                return fact;
+            }else{
+                nextTick(function(){that.helper(that,fact)});
+            }
+        },
 
         modify: function (fact, cb) {
+            this.increaseNumberAsyncAction();
             if ("function" === typeof cb) {
                 cb.call(fact, fact);
             }
             var that = this;
             that.workingMemory.modifyFact(fact,function(fact){
                 that.rootNode.modifyFact(fact);
+                that.done();
                 that.emit("modify", fact);
                 return fact;
             });
             return fact;
-        },
-        // This method is called to alter an existing fact.  It is essentially a
-        // retract followed by an assert.
-        _modify: function (fact) {
-            
-            var that = this;
-            
-                that.rootNode.modifyFact(that.workingMemory.modifyFact(fact));
-                that.emit("modify", fact);
-                return fact;
-            //}).run();
-            /*if ("function" === typeof cb) {
-                cb.call(fact, fact);
-            }
-            this.rootNode.modifyFact(this.workingMemory.modifyFact(fact));
-            this.emit("modify", fact);
-            return fact;*/
-
         },
 
         print: function () {

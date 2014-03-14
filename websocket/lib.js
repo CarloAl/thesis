@@ -31,6 +31,10 @@ var ANSWER_TEMPLATE_NOT_FOUND = 4;
 var NEW_FACT_ID = 5; 
 //value of the __type in a websocket message, when the client send an update
 var UPDATE_FACT = 6;
+//value of the __type in a websocket message, when the client is not interested anymore in a template
+var DROP_REGISTRATION = 7;
+//value of the __type in a websocket message, when the client retract a fact
+var RETRACT_FACT = 8;
 var WebSocketServer = require('ws').Server, 
 wss = new WebSocketServer({port: 8080});
 
@@ -81,20 +85,6 @@ console.log('Server running at http://127.0.0.1:8888/');
 
 //object with cancel method to cancel ws =lib.onnewfact('taxi',function(message))
 onConnection(wss,function(ws){
-/*
-	ws.addEventListener('taxi',function(message){
-		//could create a function that assert automatically..
-		console.log('received:');
-		console.log(message);
-		lib.myAssert(session1,message,flow);
-	});
-	/*
-    ws.addEventListener('passenger',function(message){
-		console.log('received:');
-		console.log(message);
-		lib.myAssert(session1,message,flow);});
-
-    onClose(ws);*/
 });
 
 
@@ -147,39 +137,8 @@ function initNools(file,scope){
 		if(data.person <= 0)
 			debugger;
 	});
-	/*session.on('match',function(){
-		console.log("Match");
-		console.log(session.getFacts(flow.getDefined('Match')));
-
-		console.log("Taxi");
-		console.log(session.getFacts(flow.getDefined('Taxi')));
-
-		console.log("Passenger");
-		console.log(session.getFacts(flow.getDefined('Passenger')));
-
-		Match = flow.getDefined('Match');
-		match = session.getFacts(Match);
-
-		flow.rule("test",[Match,"m"," m.Passenger.person == 3"],function(facts){
-			console.log("work\n\n");
-			emit('test');
-		});
-
-		ses = flow.getSession(match);
-		ses.on('test',function(){
-			console.log("work\n\n");
-		});
-
-		ses.match().then(
-	        function(){
-	            console.log("\nmatch done");
-	        },
-	        function(err){
-	            console.log(err.stack);
-	        }
-	    );
-	})*/
-	//Fiber(function(){
+	
+	session.print();
 		session.matchUntilHalt()
     .then(
         function(){
@@ -197,6 +156,7 @@ function initNools(file,scope){
 function compile(scope,file){
 	var define = {};
 	scope.notify = notify;
+	scope.notifyAll = notifyAll;
 	scope.Fiber = Fiber;
 
 	//for(i = 0; i < templates.length; i++){
@@ -214,13 +174,13 @@ function filterOut(facts,filter){
 }
 
 
-//add a listener {ws,condition} for a specific template
+//add a listener {ws,condition} for a specific template (facts with hole)
 function addListener(type,ws,message){
 	if(typeof type == "string")
 		type = type.toLowerCase();
 	if(listeners[type] == undefined)
 		listeners[type] = [];
-	listeners[type].push({ws: ws, filter: message.data.filter});
+	listeners[type].push({ws: ws, filter: message.data.filter, id:message.data.id});
 }
 
 //send to all the listeners interested to templatelateId the new fact
@@ -250,20 +210,23 @@ function dispatch(message,ws){
     	message.data.time = date;
     }
     var type = getType(message);
-    if(type == REGISTER_TEMPLATE){
-    	var template = getTemplateFromMessage(message);
+    switch(type){
 
-    	var noolsTemplate = flow.getDefined(template);
-    	//get facts now is async because is a query to mongodb
-    	session.getFacts(noolsTemplate,getFilterFromMessage(message),function(facts){
-			if(facts.length > 0)
-    			mySend(ws,facts,template);
-			
-    	});
-    	
-		addListener(template,ws,message);
-    }else{
-    	if(type == NEW_FACT){
+    	case REGISTER_TEMPLATE:
+
+	    	var template = getTemplateFromMessage(message);
+
+	    	var noolsTemplate = flow.getDefined(template);
+	    	//get facts now is async because is a query to mongodb
+	    	session.getFacts(noolsTemplate,getFilterFromMessage(message),function(facts){
+				if(facts.length > 0)
+	    			mySend(ws,facts,template);
+				
+	    	});
+	    	
+			addListener(template,ws,message);
+			break;
+	    case NEW_FACT:
     		var templateName = getTemplateNameFromMessage(message)
 		    if((index = indexofTemplatebyName(templateName)) == -1){
 				throw "template not present in the list of template";
@@ -277,34 +240,65 @@ function dispatch(message,ws){
 				myAssert(obj,cb);
 				checkCBandCall(ws.customCallBack[type],obj);
 			}
-		}else{
-			if(type == REQUIRE_TEMPLATE){
+			break;
+		case REQUIRE_TEMPLATE:
 
-				var templatesName = message.data;
+			var templatesName = message.data;
 
-				var answerTemplates = [];
-				var err = false;
-				for(var i = 0 ; i < templatesName.length; i++){
-					if(templates[templatesName[i]] == undefined)
-						err = "Template " + templatesName[i] + " not present in the server.";
-					else{
-						var Template = templates[templatesName[i]];
-						answerTemplates.push({'template': Template.toString(), '__type': Template.__type});
-					}
+			var answerTemplates = [];
+			var err = false;
+			for(var i = 0 ; i < templatesName.length; i++){
+				if(templates[templatesName[i]] == undefined)
+					err = "Template " + templatesName[i] + " not present in the server.";
+				else{
+					var Template = templates[templatesName[i]];
+					answerTemplates.push({'template': Template.toString(), '__type': Template.__type});
 				}
-				if(err)
-					mySend(ws,err,ANSWER_TEMPLATE_NOT_FOUND);	
-				mySend(ws,answerTemplates,ANSWER_TEMPLATE);
-
 			}
-		}
-		
+			if(err)
+				mySend(ws,err,ANSWER_TEMPLATE_NOT_FOUND);	
+			mySend(ws,answerTemplates,ANSWER_TEMPLATE);
+			break;
+		case UPDATE_FACT:
+			var templateName = getTemplateNameFromMessage(message)
+		    if((index = indexofTemplatebyName(templateName)) == -1){
+				throw "template not present in the list of template";
+				//more checking that all the field are instantied, maybe
+			}else{
+				var obj = new templates[index](message.data)
+				debugger;
+				//obj.objectId = message.data.objectId;
+				obj._id = message.data._id;
+				//obj.id = message.data.id;
+				modify(obj);
+			}
+			break;
+		case DROP_REGISTRATION:
+			var type = message.data.type.toLowerCase();
+			debugger;
+			listeners[type] = listeners[type].filter(function(listener){
+				if(listener.id != message.data.id)
+					return true
+				return false;
+			})
+			break;
+		case RETRACT_FACT:
+			var id = message.data.id;
+			var type = message.data.type;
+			session.retractByMongoId(id,type);
+			break;
 	}
+	
+}
+
+function modify(fact){
+	session.modifyByMongoId(fact);
 }
 
 function sendId(ws){
-	return function(id){
-		mySend(ws,id,NEW_FACT_ID);
+	//mongo,nools,mine
+	return function(_id, id,objectId){
+		mySend(ws,{id:id, _id:_id, objectId:objectId},NEW_FACT_ID);
 	}
 
 }
@@ -325,6 +319,12 @@ function myAssert(fact,cb){
 	}
 	return asserted;
 
+}
+
+
+function notifyAll(fact1 , fact2){
+    notify(fact1,fact2);
+    notify(fact2,fact1);
 }
 
 var countMatches = 0;
@@ -352,51 +352,39 @@ function mySend(ws,message,event){
 
 function onConnection(wss,cb){
 	wss.on('connection', function(ws) {
-	ws.customCallBack = [];
-	
-	ws.on('message', function(message) {       
-        //Fiber(function(){
-        	dispatch(message,ws);
-        //})    .run();
-    });
+		ws.customCallBack = [];
+		
+		ws.on('message', function(message) {       
+	        	dispatch(message,ws);
+	    });
 
-	//not called anymore
-	ws.mySend = function(data){
-		data.__templateId = data.prototype.__templateId;
-		ws.send(data);
-	}
+		ws.on('close',function(){
+			var index = webSockets.indexOf(ws);
+			if (index > -1) 
+	    		webSockets.splice(index, 1);
+			console.log("closed");
+		});
 
-	ws.addEventListener = function(event,cb){
-		/*if(event in ws.customListeners){
-			ws.customCallBack[ws.customListeners.indexOf(event)] = cb;
-		}else{
-			ws.customCallBack.push(cb);
-			ws.customListeners.push(event);
-		}*/
-		ws.customCallBack[event] = cb;
-	}
-	if(typeof cb == 'function')
-		cb(ws);
-    });
+		//not called anymore
+		ws.mySend = function(data){
+			data.__templateId = data.prototype.__templateId;
+			ws.send(data);
+		}
 
-//io.sockets.on('connection', function(ws) {
-    
-        
-	
-    //ws.send('something');
-	
+		ws.addEventListener = function(event,cb){
+			/*if(event in ws.customListeners){
+				ws.customCallBack[ws.customListeners.indexOf(event)] = cb;
+			}else{
+				ws.customCallBack.push(cb);
+				ws.customListeners.push(event);
+			}*/
+			ws.customCallBack[event] = cb;
+		}
+		if(typeof cb == 'function')
+			cb(ws);
+	    });
 }
 
-function onClose(ws,cb){
-	ws.on('close',function(){
-		var index = webSockets.indexOf(ws);
-		if (index > -1) 
-    		webSockets.splice(index, 1);
-		console.log("closed");
-		checkCBandCall(cb);
-	});
-
-}
 
 /*****util *******/
 function getType(message){
@@ -469,7 +457,6 @@ function getFilterFromMessage(message){
 
 exports.defineTemplate = defineTemplate;
 exports.compile = compile;
-exports.onClose = onClose;
 exports.mySend = mySend;
 exports.initNools = initNools;
 exports.myAssert = myAssert;
