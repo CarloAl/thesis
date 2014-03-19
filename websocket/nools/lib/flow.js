@@ -6,8 +6,7 @@ var extd = require("./extended"),
     EventEmitter = require("events").EventEmitter,
     wm = require("./workingMemory"),
     WorkingMemory = wm.WorkingMemory,
-    ExecutionStragegy = require("./executionStrategy"),
-    Fiber = require('fibers'),
+    ExecutionStragegy = require("./executionStrategy"), 
     promise = require("promise-extended"),
     nextTick = require("./nextTick"),
     AgendaTree = require("./agenda");
@@ -95,11 +94,15 @@ module.exports = declare(EventEmitter, {
 
         done: function(){
             this.asyncAction--;
-            console.log(this.asyncAction);
+            //console.log(this.asyncAction);
             if(this.asyncAction <= 0){
                 this.asyncAction = 0;
-                this.executionStrategy.setLooping(false);
-             //   this.executionStrategy.onAlter(); //add next tick
+                if(this.executionStrategy){
+                    this.executionStrategy.setLooping(false);
+                
+                    //don't need to call the onAlter explicitely because after a done I always emit
+                    nextTick(this.executionStrategy.callNext)    ; //add next tick
+                }
             }
         },
 
@@ -120,7 +123,7 @@ module.exports = declare(EventEmitter, {
                 that.rootNode.retractFact(fact);
                 
                 that.done();
-                that.emit("retract", fact);
+                that.emit("retract", fact.object);
             });
         
             return fact;
@@ -134,7 +137,7 @@ module.exports = declare(EventEmitter, {
                 that.rootNode.retractFact(fact);
                 that.done();
                 that.executionStrategy.setLooping(false);
-                that.emit("retract", fact);
+                that.emit("retract", fact.object);
                 nextTick(that.executionStrategy.onAlter);
                 return fact;
             }else{
@@ -159,7 +162,7 @@ module.exports = declare(EventEmitter, {
                 that.rootNode.modifyFact(fact);
                 that.done();
                 that.executionStrategy.setLooping(false);
-                that.emit("modify", fact);
+                that.emit("modify", fact.object);
                 nextTick(that.executionStrategy.onAlter);
                 return fact;
             }else{
@@ -176,7 +179,7 @@ module.exports = declare(EventEmitter, {
             that.workingMemory.modifyFact(fact,function(fact){
                 that.rootNode.modifyFact(fact);
                 that.done();
-                that.emit("modify", fact);
+                that.emit("modify", fact.object);
                 return fact;
             });
             return fact;

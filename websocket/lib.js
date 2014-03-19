@@ -6,6 +6,8 @@ var url = require("url"),
 	sift = require("sift");
 var fs = require('fs');
 
+
+
 var templateId = 0;
 var objectId = 0;
 //array with all the open websocket
@@ -35,10 +37,27 @@ var UPDATE_FACT = 6;
 var DROP_REGISTRATION = 7;
 //value of the __type in a websocket message, when the client retract a fact
 var RETRACT_FACT = 8;
+//value of the __type in a websocket message, when the server send a fact a client registerd or
+var SEND_FACT_FOR_TEMPLATE = 9;
+
 var WebSocketServer = require('ws').Server, 
 wss = new WebSocketServer({port: 8080});
 
-var Fiber = require('fibers');
+var openWebosockets = 0;
+/*****
+benchmark variable
+***/
+var benchmark = true,
+	nFact = 0,
+	//limit 1007
+	totFact = 1024;
+	var posix = require('posix');
+
+// raise maximum number of open file descriptors to 10k,
+// hard limit is left unchanged
+//posix.setrlimit('nofile',  { soft: 10000, hard: 10000 });
+
+
 
 
 http.createServer(function (request, response) {
@@ -139,16 +158,24 @@ function initNools(file,scope){
 	});
 	
 	session.print();
+	if(!benchmark){
 		session.matchUntilHalt()
-    .then(
-        function(){
-            console.log("\nmatch done");
-        },
-        function(err){
-            console.log(err.stack);
-        }
-    );
-	//}).run();
+		    .then(
+		        function(){
+		            console.log("\nmatch done");
+		        },
+		        function(err){
+		            console.log(err.stack);
+		        }
+		    );
+	}else{
+		session.on("retract",function(fact){
+			if(webSockets[fact.objectId]){
+				//webSockets[fact.objectId].close();
+				//webSockets.splice(fact.objectId, 1);
+			}
+		});
+	}
 	return session;
 
 }
@@ -157,7 +184,6 @@ function compile(scope,file){
 	var define = {};
 	scope.notify = notify;
 	scope.notifyAll = notifyAll;
-	scope.Fiber = Fiber;
 
 	//for(i = 0; i < templates.length; i++){
 		for(i in templates)
@@ -187,12 +213,18 @@ function addListener(type,ws,message){
 function sendToListeners(type,obj){
 	if(listeners[type] != undefined)
 		for(var i = 0; i < listeners[type].length; i++){
-			//I have to wrap ob in {object : obj } because when I call filterOut it exepcts an array of facts retrieved from
+			//I wrap obj in {object : obj } because when I call filterOut it exepcts an array of facts retrieved from
 			//the db, so with _id and obejct field.
 			filtered = filterOut([{object : obj}],listeners[type][i].filter);
 			if(filtered.length > 0)
+				if(Array.isArray(filtered))
 				//it is filterd[0] because filterOut gives back an array but here it is going to be only one new facts
-				mySend(listeners[type][i].ws,filtered,type);
+			        //I also have to send listeners[type][i].id so the client can dispatch between different listeners
+
+					mySend(listeners[type][i].ws,{facts:filtered , idListener: listeners[type][i].id},
+					 SEND_FACT_FOR_TEMPLATE);
+				else
+					debugger;
 		}
 }
 
@@ -227,6 +259,28 @@ function dispatch(message,ws){
 			addListener(template,ws,message);
 			break;
 	    case NEW_FACT:
+	    	if(benchmark){
+	    		//console.log(nFact);
+	    		if(nFact == 0)
+	    			console.time('benchmark');
+
+	    		nFact++;
+	    		if(nFact == totFact){
+	    			console.log('starting matching');
+					console.time('matching');	    			
+	    			session.match(function(err){
+					    if(err){
+					        console.error(err);
+					    }else{
+					    	console.log('Total matches ' +countMatches);
+					    	console.log('Total time:')
+					        console.timeEnd('benchmark');
+					        console.timeEnd('matching');
+					    }
+					});
+	    		}
+	    	}
+
     		var templateName = getTemplateNameFromMessage(message)
 		    if((index = indexofTemplatebyName(templateName)) == -1){
 				throw "template not present in the list of template";
@@ -266,7 +320,6 @@ function dispatch(message,ws){
 				//more checking that all the field are instantied, maybe
 			}else{
 				var obj = new templates[index](message.data)
-				debugger;
 				//obj.objectId = message.data.objectId;
 				obj._id = message.data._id;
 				//obj.id = message.data.id;
@@ -275,12 +328,16 @@ function dispatch(message,ws){
 			break;
 		case DROP_REGISTRATION:
 			var type = message.data.type.toLowerCase();
-			debugger;
+			var size = listeners[type].size;
 			listeners[type] = listeners[type].filter(function(listener){
-				if(listener.id != message.data.id)
+				
+				if(listener.id != message.data.id && ws == listener.ws)
 					return true
 				return false;
-			})
+			});
+			if(size - 1 == listeners[type].size)
+				console.log("errorrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr");
+			
 			break;
 		case RETRACT_FACT:
 			var id = message.data.id;
@@ -323,20 +380,27 @@ function myAssert(fact,cb){
 
 
 function notifyAll(fact1 , fact2){
-    notify(fact1,fact2);
-    notify(fact2,fact1);
+    try{
+    	notify(fact1,fact2);
+    	notify(fact2,fact1);
+	}catch(err){
+		console.log(err);
+		console.log(err.stack);
+	}
 }
 
 var countMatches = 0;
 //@target and @message are two instance of 2 (or the same) templates
 //notify the sender of the obj target with message
 function notify(target,message){
-	
-	console.log(++countMatches);
-	if(typeof webSockets[target.objectId] == 'undefined')
+	countMatches++;
+	//console.log(countMatches);
+	if(typeof webSockets[target.objectId] == 'undefined'){
+		debugger
 		throw "no websocket associated to " + target;
-	else{
-		mySend(webSockets[target.objectId],message,getType(message)); //MESSAGE.TEMPLATEID
+	}else{
+		
+			mySend(webSockets[target.objectId],message,getType(message)); //MESSAGE.TEMPLATEID
 	}
 }
 
@@ -345,7 +409,8 @@ function mySend(ws,message,event){
 	//if(typeof event == 'string')
 		//message.__type = event;	
 	obj = {data: message, __type : event}
-	ws.send(JSON.stringify(obj));
+	if(ws.readyState == ws.OPEN)
+		ws.send(JSON.stringify(obj));
 }
 
 
@@ -353,16 +418,19 @@ function mySend(ws,message,event){
 function onConnection(wss,cb){
 	wss.on('connection', function(ws) {
 		ws.customCallBack = [];
-		
+		console.log(++openWebosockets);
 		ws.on('message', function(message) {       
 	        	dispatch(message,ws);
 	    });
 
 		ws.on('close',function(){
 			var index = webSockets.indexOf(ws);
-			if (index > -1) 
+			if (index > -1){ 
+				//console.log(webSockets.length);
 	    		webSockets.splice(index, 1);
-			console.log("closed");
+	    		//console.log(webSockets.length);
+	    	}
+			//console.log("closed");
 		});
 
 		//not called anymore

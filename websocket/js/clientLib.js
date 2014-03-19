@@ -9,6 +9,7 @@ var NEW_FACT_ID = 5;
 var UPDATE_FACT = 6;
 var DROP_REGISTRATION = 7;
 var RETRACT_FACT = 8;
+var SEND_FACT_FOR_TEMPLATE = 9;
 
 var factId = 0
 var fact;
@@ -20,6 +21,8 @@ function Listener(id,type){
     this.type = type;
     this.drop = dropListener;
 }
+
+var registerCallback = [];
 
 function dropListener(){
     mySend({id: this.idListener, type : this.type} , DROP_REGISTRATION);
@@ -40,7 +43,7 @@ var idListener = 0;
         mySend({template: type, 
                filter: filter ,id: idListener} , REGISTER_TEMPLATE);
         //addEventListener(idListener,cb)
-        addEventListener(template.prototype.__type,cb);
+        registerCallback[idListener] = cb;
         return new Listener(idListener, type);
     }
 
@@ -62,7 +65,7 @@ var idListener = 0;
             type = type.toLowerCase();
         console.log('Message received:');
         console.log(message);
-        if(typeof ws.customCallBack[type] == 'function' ){
+        
             if(type == ANSWER_TEMPLATE){
                 var templatesString = message.data;
                 Templates = [];
@@ -73,11 +76,13 @@ var idListener = 0;
                 ws.customCallBack[type].apply(null,[null].concat(Templates)); //the second null is the error
 
             }else{
-                ws.customCallBack[type](message.data);
+                if(type == SEND_FACT_FOR_TEMPLATE){
+                	registerCallback[message.data.idListener](message.data.facts)
+                }else{
+                	ws.customCallBack[type](message.data);	
+                }
             }
 
-        }else 
-            console.log('no dedicated cb found for ' + type);
     }
 
 

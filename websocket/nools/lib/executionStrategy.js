@@ -1,15 +1,7 @@
 var extd = require("./extended"),
     Promise = extd.Promise,
-    Fiber = require('fibers'),
     nextTick = require("./nextTick"),
     isPromiseLike = extd.isPromiseLike;
-
-/*
-current scenario where doesn't work:
-I fire a rule in a fiber, when it does the query it yelds,
-it fire and other rule, yeld, finish the first query, and the second rule has an inconsistent state
-
-*/
 
 Promise.extend({
     instance: {
@@ -33,12 +25,10 @@ Promise.extend({
         },
 
         onAlter: function () {
-            //Fiber(function(){
                 this.flowAltered = true;
                 if (!this.looping && this.matchUntilHalt && !this.__halted) {
                     this.callNext();
                 }
-            //}).run();
         },
 
         isLooping: function(){

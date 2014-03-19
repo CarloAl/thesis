@@ -22,8 +22,14 @@
                     throw new Error(err);
                 else{
                     
+                    
                     var filter = {$and : [{'object.person' : { $gte : 3}}, { 'object.destination': 'VUB'}]};
-                    //var filter = Template.person == 3 && Template.destination = 'VUB';
+                    
+                    /*var filter = function(Template){
+                        return Template.person > 3 && Template.destination = "VUB";
+                    }*/
+                    
+
                     var listener = registerTo(TemplateTaxi,filter, function(message){
                         console.log("received")
                         console.log(message);

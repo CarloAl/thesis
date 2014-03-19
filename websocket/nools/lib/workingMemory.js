@@ -13,7 +13,7 @@ function getObjByMongoId(id,col,caller,cb) {
 //  var fiber = Fiber.current;
   col.findOne(
     {_id : mongojs.ObjectId(id)},function(err,docs){
-        console.log(caller);
+        //console.log(caller);
         if(err) throw new Error(err);
         if(docs == null || docs == undefined){
             debugger;
@@ -33,7 +33,7 @@ function getObjByMongoId(id,col,caller,cb) {
 
 function getObj(id,col,caller,cb) {
   col.findOne({"object.objectId" : id},function(err,docs){
-        console.log(caller);
+        //console.log(caller);
         if(err) throw new Error(err);
         if(docs == null || docs == undefined){
             throw new Error ("couldn't find fact with id " + id);
