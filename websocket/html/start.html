@@ -3,12 +3,15 @@
     <title>CarSharing</title>
     
     <script type="text/javascript" src="/js/clientLib.js"></script>
+    <script type="text/javascript" src="/js/reflect.js"></script> 
+    
     <script type= 'text/javascript'>
 
-    var lat, long;
+    var lat, long,fact;
     function getCoord(position){
         lat = position.coords.latitude;
         long = position.coords.longitude;
+        document.getElementById('button').disabled = false;
     }
 
         //var connection = myWebSocket('ws://127.0.0.1:8080');
@@ -29,6 +32,7 @@
 
 
         function matchFound(data) {
+            fact = undefined;
             string = 'Match Found! Call ' + data.username + ' at ' + data.phone;
             document.getElementById('response').innerHTML += string; 
         };
@@ -39,7 +43,7 @@
                 destination: document.getElementById('destination').value,
                 person: parseInt(document.getElementById('passenger').value),
                 price: parseInt(document.getElementById('price').value),
-                radiodius: parseInt(document.getElementById('radius').value),
+                radius: parseInt(document.getElementById('radius').value),
                 //lat: parseInt(document.getElementById('latitude').value),
                 //long: parseInt(document.getElementById('longitude').value),
                 username: document.getElementById('username').value,
@@ -47,6 +51,7 @@
                 time: document.getElementById('time').value 
             };
         }
+
         function sendSocket(){
             
             if(document.getElementById('istaxi').checked)
@@ -55,7 +60,8 @@
                 addEventListener('taxi',matchFound);
             //recupare the data from the form to assert a new fact
             var obj = getObj();
-
+            obj.lat = lat;
+            obj.long = long;
 
             /* the way I d want it:
             if(document.getElementById('istaxi').checked)
@@ -73,25 +79,35 @@
                     if(err)
                         throw new Error(err);
                     else{
-                        var fact = new Template(obj);
+                        fact = new Template(obj);
                         sendNewFact(fact);        
+                        document.getElementById('button').textContent = "Update"
+                        document.getElementById('button').onclick = update;
                     }
                 }
 
             if(document.getElementById('istaxi').checked)
                 //require ask for the definition of one or more "class" to the server. Last paramenter is the callbac
-                require("Taxi","Passenger",f);//add erro
+                require("Taxi",f);//add erro
             else
-                require("Passenger","Taxi",f);
+                require("Passenger",f);
             
-            document.getElementById('button').textContent = "Update"
-            document.getElementById('button').onclick = update;
+            
         }
 
+        function updateCoordinates(){
+            
+            if(fact){
+                navigator.geolocation.getCurrentPosition(function(position){
+                    fact.lat = position.coords.latitude;
+                    fact.long = position.coords.longitude;    
+                });
+            setTimeout(updateCoordinates,1000*60*5);
+            }
+        }
 
         function update(){
-            var obj = getObj();
-            sendUpdate(obj);
+            checkDiff(fact,getObj());
         }
     </script>
     
@@ -116,7 +132,7 @@
             Longitude: <input type='number' name='longitude' id='longitude' value=52.12><br> -->
             Leaving time: <input type='time' name='time' id='time' value="14:32"><br>
             Phone number: <input type='number' name='number' id='number' value="04756323"><br>
-            <button class="btn btn-lg btn-primary btn-block" type="button" onclick="sendSocket()" id="button">Submit</button>
+            <button disabled="true"class="btn btn-lg btn-primary btn-block" type="button" onclick="sendSocket()" id="button" >Submit</button>
         </form>
 
         <div id='response'>

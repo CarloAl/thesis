@@ -27,6 +27,10 @@ var registerCallback = [];
 function dropListener(){
     mySend({id: this.idListener, type : this.type} , DROP_REGISTRATION);
 }
+
+function newFact(obj){
+
+}
 //automatically generated variable used to assocate every listener 
 var idListener = 0;
 //function myWebSocket(address){
@@ -57,6 +61,33 @@ var idListener = 0;
 
     }
 
+function defineTemplate(name,obj){
+    var template = function (opts){
+        opts = opts || {};
+        for (var i in opts) {
+            if (i in template.prototype) {
+                this[i] = opts[i];
+            }else{
+                throw new Error(i + ' is not an attribute of '+ name+ 'fact type');
+            }
+        }
+        this.__type = name;
+        //so later on when the server answer I can save the id
+        this._id = undefined;
+
+    };
+    template.prototype.__type = name;
+    template.prototype.__templateId = obj.__templateId;
+    template.__type = name;
+    template.__templateId = obj.__templateId;
+    //if(options.automaticallyAsserted == true)
+    //  template.automaticallyAsserted = true;
+    for(i in obj){
+        template.prototype[i] = 'not yet instantiated'
+    }
+    return template;
+}
+
     
     ws.onmessage = function(message){
         message = JSON.parse(message.data);
@@ -67,11 +98,44 @@ var idListener = 0;
         console.log(message);
         
             if(type == ANSWER_TEMPLATE){
-                var templatesString = message.data;
+                var answerTemplate = message.data;
                 Templates = [];
-                for(var i = 0 ; i < templatesString.length; i++){
-                    eval("Templates[i] = " + templatesString[i].template);
-                    Templates[i].prototype.__type = templatesString[i].__type;
+                for(var i = 0 ; i < answerTemplate.length; i++){
+                    //eval("Templates[i] = " + answerTemplate[i].template);
+                    Templates[i] = defineTemplate(answerTemplate[i].__type,JSON.parse(answerTemplate[i].prototype));
+                    Templates[i].prototype.__type = answerTemplate[i].__type;
+                    var fproxy = Proxy(Templates[i],
+                        {
+                            construct: function(target, args){
+                                return Proxy(new target(args[0]),
+                                    {   set: function(target, name, val, receiver){
+                                            if(name.substring(0,2) != '__' && target[name] != val && name in target){
+                                                target[name] = val;
+                                                console.log('I am modifying ' + name);
+                                                if(name != "_id") //in this case I am hust saving the id that the server gave me back, no need to inform the server about i
+                                                    modify({name : val});
+                                            }
+                                        },
+                                        get: function(obj, prop) {
+                                            if(name.substring(0,2) != '__')
+                                            // The default behavior to return the value
+
+                                                return obj[prop];
+                                        }
+                                    }
+                                )
+                            },
+                            apply:function(target,that,args) {
+                                throw new Error('cannot call a type');
+                            },
+                            set: function(target, name, val, receiver){
+                                throw new Error('cannot change value of a Fact type');
+                            }
+
+                        }
+                      );
+                      Templates[i] = fproxy;
+                    
                 }
                 ws.customCallBack[type].apply(null,[null].concat(Templates)); //the second null is the error
 
@@ -106,7 +170,7 @@ var idListener = 0;
     }
 
     //add an hidden field __type and, strinfy and send
-    mySend = function(message,messageType,extra){
+    mySend   = function(message,messageType,extra){
         //message.__type = messageType;
 
         /*if(extra != 'undefined')
@@ -119,6 +183,31 @@ var idListener = 0;
         console.log('I am sending: ')
         console.log(message);
     }
+
+var modified = 0;
+function modify(singleModification){
+    modified ++;
+    var temp = modified;
+    /*if(modification)
+        (for i in singleModification)
+            modification[i] = singleModification[i]
+    */
+    setTimeout(function(){
+        if(modified == temp){
+            //mySend({modification: modification, id: fact._id},UPDATE_FACT);
+            mySend(fact,UPDATE_FACT);
+            modified = 0;
+        }
+            
+    },2);
+}
+
+function checkDiff(obj){
+    for(i in obj){
+        if(fact[i] != update[i])
+            fact[i] = update[i];
+    }
+}
 
 function sendUpdate(update){
     //fact.mongoId = factId;
@@ -141,8 +230,8 @@ function retractFact(){
 }
 
 function sendNewFact(newFact){
-    newFact.__type = newFact.__proto__.__type;
-    newFact.__templateId = newFact.__proto__.__templateId;
+    //newFact.__type = newFact.__proto__.__type;
+    //newFact.__templateId = newFact.__proto__.__templateId;
     fact = newFact;
     mySend(fact,NEW_FACT);
     addEventListener(NEW_FACT_ID,saveId)

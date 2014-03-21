@@ -2,7 +2,7 @@ var lib  = require("./lib");
 
 myVar Taxi = {destination,time,radius,person,price,long,lat,username,phone}
 myVar Passenger = {destination,time,radius,person,price,long,lat,username,phone}
-myVar Match = {passenger,taxi};
+myVar Match = {Passenger,Taxi};
 var file = "./rule.nools";
 lib.initNools(file);
 

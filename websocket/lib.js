@@ -51,7 +51,7 @@ var benchmark = true,
 	nFact = 0,
 	//limit 1007
 	totFact = 1024;
-	var posix = require('posix');
+//var posix = require('posix');
 
 // raise maximum number of open file descriptors to 10k,
 // hard limit is left unchanged
@@ -111,9 +111,9 @@ function defineTemplate(name,obj,options){
 	var template = function (opts){
 		opts = opts || {};
         for (var i in opts) {
-           // if (i in options) {
+            if (i in template.prototype) {
                 this[i] = opts[i];
-            //}
+            }
         }
         this.objectId = objectId++;
 
@@ -125,8 +125,8 @@ function defineTemplate(name,obj,options){
 	//if(options.automaticallyAsserted == true)
 	//	template.automaticallyAsserted = true;
 	templateId++;
-	for(i=0;i<obj.size; i++){
-		template.prototype[obj[i]] = 'not yet instantiated'
+	for(i in obj){
+		template.prototype[i] = 'not yet instantiated'
 	}
 	//templates.push(template);
 	templates[name] = template;
@@ -306,7 +306,9 @@ function dispatch(message,ws){
 					err = "Template " + templatesName[i] + " not present in the server.";
 				else{
 					var Template = templates[templatesName[i]];
-					answerTemplates.push({'template': Template.toString(), '__type': Template.__type});
+					answerTemplates.push({'template': Template.toString(), 
+										  'prototype' : JSON.stringify(Template.prototype),
+										  '__type': Template.__type});
 				}
 			}
 			if(err)
