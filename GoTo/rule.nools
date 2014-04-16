@@ -1,0 +1,189 @@
+global CLOSE_ENOUGH_DISTANCE = 1;
+global FRIEND_CLOSE = 0;
+global SHOULD_BE_GOING_TO_BECAUSE_OF_EVENT = 1;
+global SHOULD_BE_GOING_TO_BECAUSE_OF_FRIEND = 2;
+global SHOULD_NOT_BE_GOING_TO = 3;
+global SHOULD_TAKE_TRAM = 4;
+
+
+
+
+
+//suggest to go somewhere because you are partecipating in an event and it is happening
+rule "shouldBeGoingToBecauseofEvent" {
+    when{
+    	e: isEvent {name : name, placeId: placeId, startTime: startTime, endTime: endTime, id: id };
+    	ip: isPartecipating ip.eventID == id {partecipator : partecipator};
+    	currentTime : Date currentTimeIn(currentTime, startTime, endTime );
+    }then{
+        assert(new shouldGoTo(ip.partecipator,e.id));
+        console.log("** assert SHOULD_BE_GOING_TO_BECAUSE_OF_EVENT");
+        notify(ip, SHOULD_BE_GOING_TO_BECAUSE_OF_EVENT, e);
+    }
+}
+
+rule "leavingPlace"{
+	when{
+		hc : hasCoordinates {placeId: placeId, latBL:latBL, longBL:longBL, latUR:latUR, longUR:longUR};
+		ias: isAtCoordinates !checkifInBetween(ias.lat , ias.long, latBL, longBL, latUR, longUR,"leaving place") {personId:personId};
+		iap : isAtPlace iap.personId == personId && iap.placeId == placeId;
+	}then{
+		console.log("************** retract is at place" + iap);
+		retract(iap);
+	}
+}
+
+rule "shouldBeGoingRetract"{
+	when{
+		gt : isGoingTo {placeId : placeId, personId: personId};
+		sg : shouldGoTo sg.personId == personId && sg.placeId != placeId;
+	}then{
+		console.log("************** retract " + sg);
+		retract(sg);
+	}
+}
+
+rule "isAtPlaceRule"{
+	when{
+		h : hasCoordinates {placeId: ln, latBL: latBL, longBL: longBL, latUR: latUR, longUR: longUR};
+		at : isAtCoordinates checkifInBetween(at.lat , at.long, latBL, longBL, latUR, longUR,"is at place") {personId: personId};
+		not ( iap : isAtPlace iap.personId == personId && iap.placeId == ln);
+	}then{
+		assert(new isAtPlace({personId : at.personId, placeId: h.placeId}));
+		console.log("**asserted is at place**");
+	}
+}
+
+
+
+rule "retractshouldBeGoingToBecauseofFriend"{
+	when{
+		f1: friends {personId1: p1, personId2: anOtherPerson}; //u have at least 2 friends there
+		f2: friends f2.personId2 == anOtherPerson {personId1: p2};
+		iap1: isAtPlace iap1.personId == p1 {placeId : place1};
+		iap2: isAtPlace iap2.personId == p2 && iap2.placeId == place1;
+		iap3: isAtPlace iap3.personId == anOtherPerson && iap3.placeId == place1;
+		sg: shouldGoTo sg.personId == anOtherPerson && sg.placeId == place1;
+	}then{
+		console.log("************** retract shouldgoto" + sg);
+		retract(sg);
+
+	}
+}
+
+
+//has to be splitted in 2 rules
+		//a: wantToAvoid a.avoider == anOtherPerson {avoider: avoider};
+		//not(isap3: isAtPlace avoider == isap3.personId && isap3.place == place1);
+// || debug(f1,f2,iap1,iap2,iatc1,hc);//the place is not to far
+
+rule "shouldBeGoingToBecauseofFriend"{
+	when{
+		f1: friends {personId1: p1, personId2: anOtherPerson}; //u have at least 2 friends there
+		f2: friends f2.personId2 == anOtherPerson && f2.personId1 != p1 {personId1: p2};
+		iap1: isAtPlace iap1.personId == p1 {placeId : place1};
+		iap2: isAtPlace iap2.personId == p2 && iap2.placeId == place1;
+		not (iap3: isAtPlace iap3.personId == anOtherPerson && iap3.placeId == place1);
+		iatc1: isAtCoordinates iatc1.personId == anOtherPerson {lat :personLat, long:personLong};
+		hc: hasCoordinates hc.placeId == place1 && closeEnough(personLat, personLong, hc.latBL, hc.longBL, hc.latUR, hc.longUR,CLOSE_ENOUGH_DISTANCE);
+		not( sg : shouldGoTo sg.personId == anOtherPerson && sg.placeId == place1);
+	}then{
+		assert( new shouldGoTo({personId : f1.personId2, placeId: iap1.placeId }));
+		console.log("**asserted shouldGoTo");
+		debugger;
+		notify(iatc1, SHOULD_BE_GOING_TO_BECAUSE_OF_FRIEND, {friend1 : f1, friend2: f2});
+	}
+}
+
+rule "avoid"{
+	when{
+		wa : wantToAvoid {avoiderId : avoider , avoidedId: avoided};
+		iap : isAtPlace iap.personId == avoided {placeId : placetoAvoid};
+		ic: isAtCoordinates avoider == ic.personId {lat: lat , long: long};
+		hc : hasCoordinates hc.placeId == placetoAvoid && closeEnough(lat,long, hc.latBL, hc.longBL, hc.latUR, hc.longUR,CLOSE_ENOUGH_DISTANCE);
+		//not (sg : shouldNotGoTo sg.personId == avoider && sg.placeId == placeToAvoid);
+	}then{
+		assert (new shouldNotGoTo({personId: wa.avoider , placeId:iap.placetoAvoid})); //gets retracted after being send to the client
+		console.log("**asserted shouldnot GoTo");
+		notify(ic, SHOULD_NOT_BE_GOING_TO, { place : iap.placeId });
+	}
+}
+
+
+rule "retractcloseFriend" {
+	when{
+		f1 : friends {personId1: person, personId2 : anOtherPerson};
+		iac1 : isAtCoordinates iac1.personId == person  {lat : lat, long: long};
+		ncf : notifyCloseFriend ncf.personIdNotified == person && ncf.personIdNotification == anOtherPerson;
+		ncf1 : notifyCloseFriend ncf1.personIdNotified == anOtherPerson && ncf1.personIdNotification == person;
+		iac2 : isAtCoordinates iac2.personId == anOtherPerson && !checkDistance(lat,long,iac2.lat,iac2.long,CLOSE_ENOUGH_DISTANCE);
+	}then{
+		retract(ncf);
+		retract(ncf1);
+		console.log(" close freidn retract***");
+	}
+}
+
+
+rule "closeFriend" {
+	when{
+		f1 : friends {personId1: person, personId2 : anOtherPerson};
+		iac1 : isAtCoordinates iac1.personId == person  {lat : lat, long: long};
+		iac2 : isAtCoordinates iac2.personId == anOtherPerson && checkDistance(lat,long,iac2.lat,iac2.long,CLOSE_ENOUGH_DISTANCE);
+		not (ncf : notifyCloseFriend ncf.personIdNotified == person && ncf.personIdNotification == anOtherPerson);
+	}then{
+		debugger;
+		console.log(" close friend assert***");
+		assert (new notifyCloseFriend({personIdNotified: f1.personId1 , personIdNotification: iac2})); 
+		console.log(" close friend assert***");
+		notify(f1, FRIEND_CLOSE, iac2);
+	}
+}
+function deubug(){
+	debugger;
+}
+//retract because of time
+rule "retracttaketram too late" {
+	when{
+		
+		gh: goHomeBy  {personId:personId, publicTransportation: publicTransportation, direction: direction};
+		tt : timeTable tt.publicTransportation == publicTransportation && tt.direction == direction {time: time, lat:lat, long:long};
+		iat : isAtCoordinates iat.personId == personId && checkDistance(iat.lat,iat.long, lat,long,CLOSE_ENOUGH_DISTANCE);
+		currentTime : Date !currentTimeIn(currentTime, time,time);
+		npt: notifyPT npt.personIdNotified == personId &&  npt.publicTransportation == publicTransportation && npt.direction == direction && npt.time == time;
+	}then{
+		console.log("*** retract notifyPT");
+		retract(npt);
+		console.log("*** retract notifyPT");
+	}
+}
+
+rule "retracttaketram too far" {
+	when{
+		
+		gh: goHomeBy  {personId:personId, publicTransportation: publicTransportation, direction: direction};
+		tt : timeTable tt.publicTransportation == publicTransportation && tt.direction == direction {time: time, lat:lat, long:long};
+		iat : isAtCoordinates iat.personId == personId && !checkDistance(iat.lat,iat.long, lat,long,CLOSE_ENOUGH_DISTANCE);
+		currentTime : Date currentTimeIn(currentTime, time,time);
+		npt: notifyPT npt.personIdNotified == personId &&  npt.publicTransportation == publicTransportation && npt.direction == direction && npt.time == time;
+	}then{
+		console.log("*** retract notifyPT");
+		retract(npt);
+		console.log("*** retract notifyPT");
+	}
+}
+rule "taketram too far" {
+	when{
+		ie : isEvent {eventId: eventId, placeId: placeId, startTime: startTime, endTime:endTime};
+		ip : isPartecipating ip.eventId == eventId {personId:personId};
+		gh: goHomeBy gh.personId==personId {publicTransportation: publicTransportation, direction: direction};
+		tt : timeTable tt.publicTransportation == publicTransportation && tt.direction == direction {time: time, lat:lat, long:long};
+		iat : isAtCoordinates iat.personId == personId && checkDistance(iat.lat,iat.long, lat,long,CLOSE_ENOUGH_DISTANCE);
+		currentTime : Date currentTimeIn(currentTime, endTime, endTime ) && currentTimeIn(currentTime, time,time);
+		not(npt: notifyPT npt.personIdNotified == personId &&  npt.publicTransportation == publicTransportation && npt.direction == direction && npt.time == time);
+	}then{
+		console.log("*** assert notifyPT");
+		assert(new notifyPT({personIdNotified: ip.personId, publicTransportation: gh.publicTransportation, direction: timeTable.direction, time : timeTable.time}));
+		notify(ip, SHOULD_TAKE_TRAM, tt);
+	}
+}

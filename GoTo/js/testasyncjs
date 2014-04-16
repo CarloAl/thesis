@@ -1,0 +1,5 @@
+var async = require ('async');
+async.each([1,2,3],function(val,cb){
+	console.log("doing"); 
+	debugger; 
+	return cb();},function(err){console.log("done");});

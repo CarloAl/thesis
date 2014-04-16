@@ -10,6 +10,7 @@ var UPDATE_FACT = 6;
 var DROP_REGISTRATION = 7;
 var RETRACT_FACT = 8;
 var SEND_FACT_FOR_TEMPLATE = 9;
+var CUSTOM_RULE = 10;
 
 var factId = 0
 var fact;
@@ -28,15 +29,51 @@ function dropListener(){
     mySend({id: this.idListener, type : this.type} , DROP_REGISTRATION);
 }
 
-function newFact(obj){
+var rules = [];
 
-}
 //automatically generated variable used to assocate every listener 
 var idListener = 0;
 //function myWebSocket(address){
     ws = new WebSocket(address);
     ws.customCallBack = [];
     
+
+    function Rule(name,constraint,tempAction,localAction){
+        this.name = name;
+        this.constraint = constraint;
+        if(Array.isArray(constraint[0])){
+                for (var i = constraint.length - 1; i >= 0; i--) {
+                    constraint[i][0] = constraint[i][0].__type;
+                }
+            }else{
+                constraint[0] = constraint[0].__type;
+            }
+        this.notifyMe = tempAction.toString().indexOf("notifyMe()") > -1 ? true:false;
+        this.action = function(facts){
+            var vars = [];
+            //save the variable used by the rule in the scope
+            if(Array.isArray(constraint[0])){
+                for (var i = constraint.length - 1; i >= 0; i--) {
+                    vars.push(constraint[i][1]);
+                }
+            }else{
+                vars.push(constraint[1])
+            }
+            for (var i = vars.length - 1; i >= 0; i--) {
+                eval(vars[i] + ' = facts.'+ vars[i]);
+            }
+            var entire = tempAction.toString(); 
+            var body = entire.slice(entire.indexOf("{") + 1, entire.lastIndexOf("}"));
+            //this way I have in scope the variable of the rule
+            new Function(body)();
+        }
+        this.localAction = localAction;
+    }
+
+    function assertRule(rule){
+        rules[rule.name] = rule;
+        mySend(rule,CUSTOM_RULE);
+    }
 
     //this way you can add only one listener per type, if u add idlistener to the message to the server, then the server can send it back to dispatch to 
     //the right callback
@@ -90,14 +127,14 @@ function defineTemplate(name,obj){
 
     
     ws.onmessage = function(message){
-        message = JSON.parse(message.data);
+        message = JSONfn.parse(message.data);
         type = getType(message);
         if(typeof type == "string")
             type = type.toLowerCase();
         console.log('Message received:');
         console.log(message);
-        
-            if(type == ANSWER_TEMPLATE){
+        switch(type){
+            case ANSWER_TEMPLATE:
                 var answerTemplate = message.data;
                 Templates = [];
                 for(var i = 0 ; i < answerTemplate.length; i++){
@@ -107,8 +144,10 @@ function defineTemplate(name,obj){
                     var fproxy = Proxy(Templates[i],
                         {
                             construct: function(target, args){
-                                return Proxy(new target(args[0]),
-                                    {   set: function(target, name, val, receiver){
+                                var fact = new target(args[0]);
+                                sendNewFact(fact);        
+                                var proxy = Proxy(fact,
+                                        {  set: function(target, name, val, receiver){
                                             if(name.substring(0,2) != '__' && target[name] != val && name in target){
                                                 target[name] = val;
                                                 console.log('I am modifying ' + name);
@@ -123,7 +162,8 @@ function defineTemplate(name,obj){
                                                 return obj[prop];
                                         }
                                     }
-                                )
+                                );
+                                return proxy;
                             },
                             apply:function(target,that,args) {
                                 throw new Error('cannot call a type');
@@ -139,12 +179,18 @@ function defineTemplate(name,obj){
                 }
                 ws.customCallBack[type].apply(null,[null].concat(Templates)); //the second null is the error
 
-            }else{
-                if(type == SEND_FACT_FOR_TEMPLATE){
-                	registerCallback[message.data.idListener](message.data.facts)
-                }else{
-                	ws.customCallBack[type](message.data);	
-                }
+                break;
+            case SEND_FACT_FOR_TEMPLATE:
+                registerCallback[message.data.idListener](message.data.facts)
+                break;
+            case RULE_FIRED: 
+                var facts = message.data.facts;
+                var ruleName = message.data.ruleName;
+                rules[ruleName](facts);
+                break;
+            default:
+                ws.customCallBack[type](message.data);	
+                
             }
 
     }
@@ -177,7 +223,7 @@ function defineTemplate(name,obj){
             for(i in extra)
                 message['__' + i] = extra [i];*/
         
-        var string = JSON.stringify({data: message, __type : messageType});
+        var string = JSONfn.stringify({data: message, __type : messageType});
 
         ws.send(string);
         console.log('I am sending: ')

@@ -1,0 +1,154 @@
+<html>
+<head>
+    <title>CarSharing</title>
+     <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+    <script src="https://code.jquery.com/jquery.js"></script>
+    <!-- Include all compiled plugins (below), or include individual files as needed -->
+    <script src="../js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="../js/clientLib.js"></script>
+    <script type= 'text/javascript'>
+
+
+        var connection = myWebSocket('ws://127.0.0.1:8080');
+        //connection.onopen = function () {console.log("Websocket open");};
+        //connection.onmessage = matchFound;
+        connection.onclose = function(event) {console.log(event);};
+        
+        connection.addEventListener('matchFound',matchFound);
+
+        function matchFound(data) {
+            console.log(data);
+            string = 'Match Found! Call ' + data.username + ' at ' + data.phone;
+            document.getElementById('response').innerHTML += string; 
+        };
+
+        function sendSocket(){
+            var string = JSON.stringify({ 
+                destination: document.getElementById('destination').value,
+                person: document.getElementById('passenger').value,
+                price: document.getElementById('price').value,
+                radius: document.getElementById('radius').value,
+                lat: document.getElementById('latitude').value,
+                long: document.getElementById('longitude').value,
+                username: document.getElementById('username').value,
+                //taxi: document.getElementById('istaxi').checked,
+                phone: document.getElementById('number').value, 
+                time: document.getElementById('time').value,
+                __type: document.getElementById('istaxi')
+            })
+            console.log(string);
+            connection.send(string);
+
+        }
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Bootstrap -->
+    <link href="../css/bootstrap.css" rel="stylesheet">
+</head>
+<body>
+     <form class="form-horizontal">
+        <fieldset>
+          <div class="control-group">
+            <label class="control-label" for="username">Name: </label>
+            <div class="controls">
+              <input type="text" class="input" name='username' id='username' value='carlo'>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label class="control-label" for="destination">Destination: </label>
+            <div class="controls">
+              <input type="text" class="input-xlarge" name='destination' id='destination' value='VUB'>
+            </div>
+          </div>
+
+
+          <div class="control-group">
+            <label class="control-label" for="passenger">Passenger: </label>
+            <div class="controls">
+              <input type="text" class="input-xlarge" name='passenger' id='passenger' value="3">
+            </div>
+          </div>
+          
+          <div class="control-group">
+            <label class="control-label" for="price">Price: </label>
+            <div class="controls">
+              <input type="text" class="input-xlarge" name='price' id='price' value="10">
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label class="control-label" for="radius">Radius[km]: </label>
+            <div class="controls">
+              <input type="text" class="input-xlarge" name='radius' id='radius' value="3">
+            </div>
+          </div>
+          
+          <div class="control-group">
+            <label class="control-label" for="latitude">Latitude: </label>
+            <div class="controls">
+              <input type="text" class="input-xlarge" name='latitude' id='latitude' value="7.39">
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label class="control-label" for="longitude">Longitude: </label>
+            <div class="controls">
+              <input type="text" class="input-xlarge" name='longitude' id='longitude' value="52.12">
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label class="control-label" for="time">Leaving time: </label>
+            <div class="controls">
+              <input type="text" class="input-xlarge" name='time' id='time' value="14:32">
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label class="control-label" for="number">Phone number: </label>
+            <div class="controls">
+              <input type="text" class="input-xlarge"name='number' id='number' value="04756323">
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label class="control-label" for="istaxi">Select list</label>
+            <div class="controls">
+              <select id="select01">
+                <option value="taxi">offer a lift </option>
+                <option value="passenger">looking for a lift</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-actions">  
+
+            <button class="btn btn-lg btn-primary btn-block" type="button" onclick="sendSocket()">Submit</button>
+          </div>  
+        </fieldset>
+</form>
+<!--
+    <div class="container">
+
+        <form name='data' class='form-signin'>
+            <h2 class="form-signin-heading">Please sign in</h2>
+            <input class="form-control" type="radio" name="taxi" id="istaxi" value="taxi" >Offer a lift
+            <input class="form-control" type="radio" name="taxi" id="ispassenger" value="passenger" checked>Looking for a lift<br>
+            Name: <input class="form-control" placeholder = '' type='text' name='username' id='username' value='carlo'><br>
+            Destination: <input type='text' name='destination' id='destination' value='VUB'><br>
+            Passenger: <input type='text' name='passenger' id='passenger' value="3"><br>
+            Price: <input type='text' name='price' id='price' value="10"><br>
+            Radius[km]: <input type='text' name='radius' id='radius' value="3"><br>
+            Latitude: <input type='text' name='latitude' id='latitude' value="7.39"><br>
+            Longitude: <input type='text' name='longitude' id='longitude' value="52.12"><br>
+            Leaving time: <input type='time' name='time' id='time' value="14:32"><br>
+            Phone number: <input type='number' name='number' id='number' value="04756323"><br>
+            <button class="btn btn-lg btn-primary btn-block" type="button" onclick="sendSocket()">Submit</button>
+        </form>
+
+        <div id='response'>
+        </div>
+    </div>
+    -->
+</body>
+</html>

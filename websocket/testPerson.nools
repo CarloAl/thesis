@@ -1,0 +1,79 @@
+function deg2rad(deg) {
+  return deg * (Math.PI/180);
+} 
+
+
+function getDistanceFromLatLonInKm(lat1,lon1,lat2,lon2) {
+
+  if(lat1===lat2 && lon1===lon2){
+   return 0
+  }else{
+     var R = 6371; // Radius of the earth in km
+     var dLat = deg2rad(lat2-lat1);  
+     var dLon = deg2rad(lon2-lon1); 
+     var a = 
+       Math.sin(dLat/2) * Math.sin(dLat/2) +
+       Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+       Math.sin(dLon/2) * Math.sin(dLon/2); 
+     var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+     var d = R * c; // Distance in km
+     return d;
+  }
+}
+
+function debug(t,p){
+  debugger;
+  return true;
+}
+
+
+function checkDistance(lat1,lon1,lat2,lon2,radius1,radius2){
+
+  //var radius = radius1<radius2?radius1:radius2;
+  var radius = Math.min(radius2,radius1);
+  if(getDistanceFromLatLonInKm(lat1,lon1,lat2,lon2) <= radius){
+    return true
+  }else{
+    return false;
+  }
+}
+
+function sameDay(date1,date2){
+    if(date1.getDay() == date2.getDay() && date1.getMonth() == date2.getMonth() && date1.getFullYear() == date2.getFullYear() )
+        return true;
+    return false;
+}
+
+rule matchingLowerSeats{
+	when{
+		t : Taxi {destination:d, person:pe, price:tPrice, time:tTime, lat:tLat, long: tLong, radius:tRadius};
+		p : Passenger p.person < pe &&  p.destination == d && p.price <= tPrice && sameDay(p.time,tTime) && checkDistance(tLat, tLong, p.lat,p.long,p.radius, tRadius); // && debug(t,p);
+	}then{
+		if(!(p.person < t.person &&  p.destination == t.destination && p.price <= t.price)){
+			debugger;
+        }else{
+            notifyAll(t,p);
+            assert(new Match({taxi:t,passenger:p}));
+            modify(t,function(){
+                this.person = this.person - p.person;
+            });
+            retract(p);
+        }
+    }
+}
+
+rule matchingEqualSeats{
+    when{
+        t : Taxi {destination:d, person:pe, price:tPrice, time:tTime, lat:tLat, long: tLong, radius:tRadius};
+        p : Passenger p.person == pe &&  p.destination == d && p.price <= tPrice && sameDay(p.time,tTime) && checkDistance(tLat, tLong, p.lat,p.long,p.radius, tRadius);// && debug(t,p);
+    }then{
+        if(!(p.person == t.person &&  p.destination == t.destination && p.price <= t.price)){
+            debugger;
+        }else{
+            notifyAll(t,p);
+            assert(new Match({taxi:t,passenger:p}));
+            retract(t);
+            retract(p);
+        }
+    }
+}

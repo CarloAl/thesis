@@ -3,6 +3,8 @@ var nools = require("./nools/index");
 var path = require('path');
 var http = require("http");
 var url = require("url"),
+	oid = require('oid'),
+	JSONfn = require('json-fn'),
 	sift = require("sift");
 var fs = require('fs');
 
@@ -18,7 +20,8 @@ var session,flow;
 
 //for each template I have an array of websockets (the clients) interested to them
 var listeners = []; 
-
+//vector that keep track of the webspcket of the client that assert new rule at run time
+var callbackOnFiredRules = [];
 //value of the __type in a websocket message, indicate that we want to assert a new fact
 var NEW_FACT = 0;
 //value of the __type in a websocket message, indicate that we want to register to a template
@@ -39,6 +42,10 @@ var DROP_REGISTRATION = 7;
 var RETRACT_FACT = 8;
 //value of the __type in a websocket message, when the server send a fact a client registerd or
 var SEND_FACT_FOR_TEMPLATE = 9;
+//value of the __type in a websocket message, when the client install a new rule on the server
+var CUSTOM_RULE = 10;
+//value of the __type in a websocket message, when the server answer because a rule got fired in the client
+var RULE_FIRED = 11;
 
 var WebSocketServer = require('ws').Server, 
 wss = new WebSocketServer({port: 8080});
@@ -47,7 +54,7 @@ var openWebosockets = 0;
 /*****
 benchmark variable
 ***/
-var benchmark = true,
+var benchmark = false,
 	nFact = 0,
 	//limit 1007
 	totFact = 1024;
@@ -107,6 +114,9 @@ onConnection(wss,function(ws){
 });
 
 
+
+
+
 function defineTemplate(name,obj,options){
 	var template = function (opts){
 		opts = opts || {};
@@ -152,7 +162,8 @@ function initNools(file,scope){
 	session.on("modify", function(data){
 		//console.log("data asserted:");
 		//console.log(data);
-		
+		var type = getType(data);
+		sendToListeners(type,data);
 		if(data.person <= 0)
 			debugger;
 	});
@@ -183,6 +194,7 @@ function initNools(file,scope){
 function compile(scope,file){
 	var define = {};
 	scope.notify = notify;
+	scope.notifyMe = function(){};
 	scope.notifyAll = notifyAll;
 
 	//for(i = 0; i < templates.length; i++){
@@ -232,7 +244,7 @@ function sendToListeners(type,obj){
 function dispatch(message,ws){
 	//console.log('received : ');
 	//console.log(message);
-	message = JSON.parse(message);
+	message = JSONfn.parse(message);
 	
 	if(message.data.time != undefined){
 		var date = new Date();
@@ -292,6 +304,18 @@ function dispatch(message,ws){
 				webSockets[obj.objectId] = ws;
 				var cb = sendId(ws);
 				myAssert(obj,cb);
+
+				var Passenger = flow.getDefined("Passenger");
+			    var Taxi = flow.getDefined("Taxi");
+			    flow.rule("Test", [["Passenger", "p", "p.destination == 'VUB' && p.price < 11 && p.person > 2", {destination:"pd"}],
+			                       ["Taxi", "t", "t.destination == pd"]],
+			                        function (facts) {
+								        console.log(facts.p.destination);
+								        debugger
+								        console.log("fired");
+			    });
+			    session.ruleAtRunTime(flow.__rules[flow.__rules.length-1]);
+
 				checkCBandCall(ws.customCallBack[type],obj);
 			}
 			break;
@@ -345,6 +369,18 @@ function dispatch(message,ws){
 			var id = message.data.id;
 			var type = message.data.type;
 			session.retractByMongoId(id,type);
+			break;
+		case CUSTOM_RULE:
+			var rule = message.data;
+			var name = oid.hash(ws) + rule.name ;
+			callbackOnFiredRules[name] = ws;
+			if(rule.notifyMe){
+				session.on("fire",function(name,facts){
+					mySend(callbackOnFiredRules[name],{facts : facts, ruleName : rule.name},RULE_FIRED);
+				})
+			}
+			flow.rule(name, rule.constraint, rule.action);
+			session.ruleAtRunTime(flow.__rules[flow.__rules.length-1]);
 			break;
 	}
 	
@@ -412,7 +448,7 @@ function mySend(ws,message,event){
 		//message.__type = event;	
 	obj = {data: message, __type : event}
 	if(ws.readyState == ws.OPEN)
-		ws.send(JSON.stringify(obj));
+		ws.send(JSONfn.stringify(obj));
 }
 
 
