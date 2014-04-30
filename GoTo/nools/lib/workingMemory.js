@@ -36,7 +36,7 @@ function getObj(id,col,caller,cb) {
         //console.log(caller);
         if(err) throw new Error(err);
         if(docs == null || docs == undefined){
-            throw new Error ("couldn't find fact with id " + id);
+            //throw new Error ("couldn't find fact with id " + id);
             debugger;
         }
         cb(docs);
@@ -49,7 +49,10 @@ function getCollection(obj){
     if(obj instanceof InitialFact)
         mycollection = db.collection('initialfact');
     else
-        mycollection = db.collection(obj.__type.toLowerCase());
+        if(obj.__type)
+            mycollection = db.collection(obj.__type.toLowerCase());
+        else
+            mycollection = db.collection(obj.constructor.name);    
     return mycollection;
 }
 
@@ -129,6 +132,7 @@ declare({
         },
 
         getFactsByType: function (Template,cb) {
+            debugger;
             var collection = getCollection(Template);
             collection.find(function(err, doc){
                 cb(doc);
@@ -248,13 +252,17 @@ declare({
             var obj = getObj(fact.objectId,mycollection,"retractFact",function(obj){
             //when u retrieve obj from mongodb the obj.object.constructor is for some reason changed and the retract and modify on
             //the rete graph don't work, so we restore the original fact.
-                obj.object = fact;
-                mycollection.remove({ _id : obj._id},function(err,docs,laster){
-                    if(docs.n <= 0)
-                        throw new Error("the fact to remove does not exist");
-                });
-                
-                cb(obj);
+                if(obj == null)
+                    cb(undefined);
+                else{
+                    obj.object = fact;
+                    mycollection.remove({ _id : obj._id},function(err,docs,laster){
+                        if(docs.n <= 0)
+                            throw new Error("the fact to remove does not exist");
+                    });
+                    
+                    cb(obj);
+                }
             });
             return fact;
 

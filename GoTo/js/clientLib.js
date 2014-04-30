@@ -1,34 +1,39 @@
 var address = 'ws://127.0.0.1:8080';
 
-var NEW_FACT                  = 0;
-var REGISTER_TEMPLATE         = 1;
-var REQUIRE_TEMPLATE          = 2;
-var ANSWER_TEMPLATE           = 3;
-var ANSWER_TEMPLATE_NOT_FOUND = 4;
-var NEW_FACT_ID               = 5; 
-var UPDATE_FACT               = 6;
-var DROP_REGISTRATION         = 7;
-var RETRACT_FACT              = 8;
-var SEND_FACT_FOR_TEMPLATE    = 9;
-var CUSTOM_RULE               = 10;
-var RULE_FIRED                = 11;
-var UPDATE_FACT_SERVER        = 12;
+var NEW_FACT                  = 1230;
+var REGISTER_TEMPLATE         = 1231;
+var REQUIRE_TEMPLATE          = 1232;
+var ANSWER_TEMPLATE           = 1233;
+var ANSWER_TEMPLATE_NOT_FOUND = 1234;
+var NEW_FACT_ID               = 1235; 
+var UPDATE_FACT               = 1236;
+var DROP_REGISTRATION         = 1237;
+var RETRACT_FACT              = 1238;
+var SEND_FACT_FOR_TEMPLATE    = 1239;
+var CUSTOM_RULE               = 12310;
+var RULE_FIRED                = 12311;
+var UPDATE_FACT_SERVER        = 12312;
+var DISPOSE                   = 12313;
+var USER_ID                   = 12314;
+var NEW_USER_ID               = 12315;
 
 var factId = 0
-var fact;
+var fact
 //keep all the aserted fact
 var assertedFacts = [];
 var idListener = 0;
 var objectId = 0;
 var primus;
+var uid = -1;
 //API
-var addEventListener,
+var addListener,
+    bufferedMessages = [],
     requireTemplate;
 
 
 requirejs.config({
     //By default load any module IDs from js/lib
-    baseUrl: 'js/',
+    baseUrl: '../js/',
     //except, if the module ID starts with "app",
     //load it from the js/app directory. paths
     //config is relative to the baseUrl, and
@@ -38,8 +43,8 @@ requirejs.config({
         app: '../app'
     }
 });
-
-require(["js/reflect.js","/primus/primus.js","/js/jsonfn.js"], function(reflect,Primus,JSONfs) {
+//http://127.0.0.1:8888/primus/primus.js
+require(["../js/reflect.js","/primus/primus.js","../js/jsonfn.js"], function(reflect,Primus) { //no need to add a 3rd paramenter for jsonfn because it creates a global variable
     primus = new Primus('http://localhost:8888/' ,{
           reconnect: {
               maxDelay: Infinity // Number: The max delay for a reconnect retry.
@@ -54,6 +59,14 @@ require(["js/reflect.js","/primus/primus.js","/js/jsonfn.js"], function(reflect,
 
     primus.on('open', function open() {
       console.log('Connection is alive and kicking');
+      var string = /*JSONfn.stringify(*/{data: uid, __type : USER_ID, uid : uid};
+      primus.write(string);
+      for (var i = 0 ; i < bufferedMessages.length ; i++ ){
+          primus.send(bufferedMessages[i]);
+      };
+      bufferedMessages = [];
+      //send that you are done with it
+      
     });
 
 
@@ -63,7 +76,7 @@ require(["js/reflect.js","/primus/primus.js","/js/jsonfn.js"], function(reflect,
 
     primus.on('end', function(msg){
       console.log(msg +" ended");
-    });
+    }); 
 
     primus.on('reconnect', function () {
       console.log('Reconnect attempt started');
@@ -144,14 +157,14 @@ require(["js/reflect.js","/primus/primus.js","/js/jsonfn.js"], function(reflect,
             var type = template.prototype.__type;
             mySend({template: type, 
                    filter: filter ,id: idListener} , REGISTER_TEMPLATE);
-            //addEventListener(idListener,cb)
+            //addListener(idListener,cb)
             registerCallback[idListener] = cb;
             return new Listener(idListener, type);
         }
 
 
         //it just tell what to do in case we receive a fact of acertain type, doesn't talk to the server
-        addEventListener = function (event,cb){
+        addListener = function (event,cb){
             if(typeof event == "string")
                 primus.customCallBack["__custom__" +event.toLowerCase()] = cb;
             else
@@ -177,6 +190,10 @@ require(["js/reflect.js","/primus/primus.js","/js/jsonfn.js"], function(reflect,
         };
         template.prototype.__type = name;
         template.prototype.__templateId = obj.__templateId;
+        template.prototype.retract = function(){
+            debugger;
+            retractFact(this._id, this.__type);
+        }
         template.__type = name;
         template.__templateId = obj.__templateId;
         //if(options.automaticallyAsserted == true)
@@ -196,6 +213,10 @@ require(["js/reflect.js","/primus/primus.js","/js/jsonfn.js"], function(reflect,
         console.log('Message received:');
         console.log(message);
         switch(type){
+            case NEW_USER_ID:
+                uid = message.data;
+                console.log("New uid " +uid);
+                break;
             case ANSWER_TEMPLATE:
                 var answerTemplate = message.data;
                 Templates = [];
@@ -208,7 +229,10 @@ require(["js/reflect.js","/primus/primus.js","/js/jsonfn.js"], function(reflect,
                             construct: function(target, args){
                                 var fact = new target(args[0]);
                                 assertedFacts[fact.objectId] = fact;
-                                sendNewFact(fact);        
+                                //args[1] is the option
+                                sendNewFact(fact,args[1]);                                                
+                                
+                                
                                 var proxy = Proxy(fact,
                                         {  set: function(target, name, val, receiver){
                                             if(name.substring(0,2) != '__' && target[name] != val && name in target){
@@ -219,7 +243,7 @@ require(["js/reflect.js","/primus/primus.js","/js/jsonfn.js"], function(reflect,
                                             }
                                         },
                                         get: function(obj, prop) {
-                                            if(prop.substring(0,2) != '__')
+                                            //if(prop.substring(0,2) != '__')
                                             // The default behavior to return the value
 
                                                 return obj[prop];
@@ -262,7 +286,12 @@ require(["js/reflect.js","/primus/primus.js","/js/jsonfn.js"], function(reflect,
                 if(fact.onModify)
                     fact.onModify();
             default:
-                primus.customCallBack["__custom__" +type](message.data);  
+                if(typeof primus.customCallBack["__custom__" +type] == "function")
+                    primus.customCallBack["__custom__" + type](message.data);  
+                else{
+                    debugger;
+                    throw new Error ( "No customCallBack for " + type);
+                }
                 
             }
 
@@ -274,8 +303,8 @@ require(["js/reflect.js","/primus/primus.js","/js/jsonfn.js"], function(reflect,
             for (var i = 0; i < arguments.length; i++) {
                 if(typeof arguments[i] == "function"){
                     mySend(templates,REQUIRE_TEMPLATE);
-                    addEventListener(ANSWER_TEMPLATE,arguments[i]);
-                    addEventListener(ANSWER_TEMPLATE_NOT_FOUND,arguments[i]);
+                    addListener(ANSWER_TEMPLATE,arguments[i]);
+                    addListener(ANSWER_TEMPLATE_NOT_FOUND,arguments[i]);
                 }else{
                     templates[i] = arguments[i];
                 }
@@ -283,7 +312,7 @@ require(["js/reflect.js","/primus/primus.js","/js/jsonfn.js"], function(reflect,
 
             /*mySend(template,REQUIRE_TEMPLATE);
             toRemove = template;
-            addEventListener(ANSWER_TEMPLATE,cb);*/
+            addListener(ANSWER_TEMPLATE,cb);*/
                 
 
         }
@@ -295,12 +324,18 @@ require(["js/reflect.js","/primus/primus.js","/js/jsonfn.js"], function(reflect,
             /*if(extra != 'undefined')
                 for(i in extra)
                     message['__' + i] = extra [i];*/
+            if(uid == -1){
+                setTimeout(mySend,700,message,messageType,extra);
+            }else{
+                var string = /*JSONfn.stringify(*/{data: message, __type : messageType, uid : uid};
+                if(primus.socket.readyState != primus.socket.OPEN)
+                    bufferedMessages.push(string);
+                else
+                    primus.write(string);
+                console.log('I am sending: ')
+                console.log(message);    
+            }
             
-            var string = /*JSONfn.stringify(*/{data: message, __type : messageType};
-
-            primus.write(string);
-            console.log('I am sending: ')
-            console.log(message);
         }
 
     var modified = 0;
@@ -339,21 +374,23 @@ require(["js/reflect.js","/primus/primus.js","/js/jsonfn.js"], function(reflect,
 
     function saveId(ids){
     //    factId = id;
-        fact._id = ids._id;
+        //fact._id = ids._id;
+
+        assertedFacts[ids.clientId]._id = ids._id; //mongo id, used later for retract and modify
         //fact.objectId = ids.objectId;
         //fact.id = ids.id;
     }
 
-    function retractFact(){
-        mySend({id:fact._id, type: fact.__type} ,RETRACT_FACT);
+    function retractFact(id,type){
+        mySend({id:id, type: type} ,RETRACT_FACT);
     }
 
-    function sendNewFact(newFact){
+    function sendNewFact(newFact,options){
         //newFact.__type = newFact.__proto__.__type;
         //newFact.__templateId = newFact.__proto__.__templateId;
         fact = newFact;
-        mySend(fact,NEW_FACT);
-        addEventListener(NEW_FACT_ID,saveId)
+        mySend({fact:fact, opts: options},NEW_FACT);
+        addListener(NEW_FACT_ID,saveId)
     }
 
 
@@ -365,21 +402,25 @@ require(["js/reflect.js","/primus/primus.js","/js/jsonfn.js"], function(reflect,
         return -1;
     }
 
+
+    function dispose(){
+        mySend({},DISPOSE);
+    }
+
+    
     function getType(message){
         return message.__type;
     }
 
     if(typeof module != 'undefined'){
-        exports.mySend = mySend;
-        exports.compile = compile;
-        exports.mySend = mySend;
-        exports.initNools = initNools;
-        exports.myAssert = myAssert;
-        exports.onConnection = onConnection;
+        exports.requireTemplate = requireTemplate;
+        exports.dispose = dispose;
+        exports.addListener = addListener;
+    
     }
 
     return {
-        addEventListener:addEventListener,
+        addListener:addListener,
         requireTemplate: requireTemplate
     }
 

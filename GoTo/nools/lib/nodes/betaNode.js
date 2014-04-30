@@ -24,8 +24,8 @@ Node.extend({
             while (--i > -1) {
                 entry = entrySet[i];
                 outNode = entry.key;
-                if(outNode.new == undefined)
-                    debugger;
+                //if(outNode.new == undefined)
+                    //debugger;
                 outNode.new ++;
                 outNode[method](context,runTime,ruleBetaNodes);
             }

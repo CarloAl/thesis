@@ -155,6 +155,7 @@ var Socket = Primus.createSocket(),
         }
 
     function dispose(){
+        uid = -1;
         mySend({},DISPOSE);
     }
 
@@ -207,7 +208,7 @@ var Socket = Primus.createSocket(),
                             construct: function(target, args){
                                 var fact = new target(args[0]);
                                 assertedFacts[fact.objectId] = fact;
-                                sendNewFact(fact);        
+                                sendNewFact(fact,args[1]);        
                                 var proxy = Reflect.Proxy(fact,
                                         {  set: function(target, name, val, receiver){
                                             if(name.substring(0,2) != '__' && target[name] != val && name in target){
@@ -356,11 +357,11 @@ var Socket = Primus.createSocket(),
         mySend({id:fact._id, type: fact.__type} ,RETRACT_FACT);
     }
 
-    function sendNewFact(newFact){
+    function sendNewFact(newFact,options){
         //newFact.__type = newFact.__proto__.__type;
         //newFact.__templateId = newFact.__proto__.__templateId;
         fact = newFact;
-        mySend(fact,NEW_FACT);
+        mySend({fact:fact, opts: options},NEW_FACT);
         addEventListener(NEW_FACT_ID,saveId)
     }
 

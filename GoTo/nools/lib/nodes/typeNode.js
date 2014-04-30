@@ -12,7 +12,7 @@ AlphaNode.extend({
             if(constraint.constraint.__type)
                 typeVar = constraint.constraint.__type.toLowerCase();
             else
-                typeVar = type.toLowerCase();
+                typeVar = type.constructor.name.toLowerCase() //type.toLowerCase();
             this.type = typeVar;
         },
         //runTime means that we are asserting because a rule has been added at run time
@@ -51,8 +51,8 @@ AlphaNode.extend({
             var es = this.__entrySet, i = -1, l = es.length;
             while (++i < l) {
                 var e = es[i], outNode = e.key, paths = e.value;
-                if(outNode.new == undefined)
-                    debugger;
+                //if(outNode.new == undefined)
+                    //debugger;
                 /* typenode will always have an alphanode after him so also when I add a rule at run time I need to propagate
                 if(runTime)
                     if(outNode.new)

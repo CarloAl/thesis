@@ -117,6 +117,15 @@ tmp$407['time'] = undefined;
 //acces to it, plus nodejs cache the require object so u just have a different pointer to the same thing
 var lib$408 = require('./lib');
 var notifyPT$410 = lib$408.defineTemplate('notifyPT', tmp$407);
+var tmp$408 = {};
+tmp$408['eventId'] = undefined;
+tmp$408['placeId'] = undefined;
+tmp$408['startTime'] = undefined;
+tmp$408['endTime'] = undefined;
+//ugly solution but the problem otherwise would be that, since this are hygenic macro, the var lib outside would be renamed so I couldn't 
+//acces to it, plus nodejs cache the require object so u just have a different pointer to the same thing
+var lib$409 = require('./lib');
+var notifyEvent$410 = lib$409.defineTemplate('notifyEvent', tmp$408);
 var file$410 = './rule.nools';
 lib$343.initNools(file$410);
 

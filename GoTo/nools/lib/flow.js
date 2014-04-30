@@ -117,14 +117,16 @@ module.exports = declare(EventEmitter, {
 
         retract: function (fact) {
             //fact = this.workingMemory.getFact(fact);
-            
+            if(fact.cancel)
+                fact.cancel();
             var that = this;
             this.increaseNumberAsyncAction();
-            that.workingMemory.retractFact(fact,function(fact){
-                that.rootNode.retractFact(fact);
+            that.workingMemory.retractFact(fact,function(obj){
+                if(obj)
+                    that.rootNode.retractFact(obj);
                 
                 that.done();
-                that.emit("retract", fact.object);
+                that.emit("retract", fact);
             });
         
             return fact;

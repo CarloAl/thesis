@@ -1,26 +1,35 @@
-global CLOSE_ENOUGH_DISTANCE = 1;
+global CLOSE_ENOUGH_DISTANCE = 1; //[km]
 global FRIEND_CLOSE = 0;
 global SHOULD_BE_GOING_TO_BECAUSE_OF_EVENT = 1;
 global SHOULD_BE_GOING_TO_BECAUSE_OF_FRIEND = 2;
 global SHOULD_NOT_BE_GOING_TO = 3;
 global SHOULD_TAKE_TRAM = 4;
+global NEW_EVENT = 5;
 
-
-
-
+function debug(){
+	debugger;
+	return true;
+}
 
 //suggest to go somewhere because you are partecipating in an event and it is happening
 rule "shouldBeGoingToBecauseofEvent" {
     when{
-    	e: isEvent {name : name, placeId: placeId, startTime: startTime, endTime: endTime, id: id };
-    	ip: isPartecipating ip.eventID == id {partecipator : partecipator};
+    	e: isEvent {name : name, placeId: placeId, startTime: startTime, endTime: endTime, eventId: id };
+    	ip: isPartecipating ip.eventId == id {personId : partecipator};
     	currentTime : Date currentTimeIn(currentTime, startTime, endTime );
+    	not (sg : shouldGoTo sg.personId == partecipator && sg.placeId == id);
+    	//check that the person is not already there
     }then{
-        assert(new shouldGoTo(ip.partecipator,e.id));
+        
+        var sg = new shouldGoTo({personId: ip.personId, placeId : e.placeId});
+        assert(sg);
         console.log("** assert SHOULD_BE_GOING_TO_BECAUSE_OF_EVENT");
-        notify(ip, SHOULD_BE_GOING_TO_BECAUSE_OF_EVENT, e);
+        notify(ip, SHOULD_BE_GOING_TO_BECAUSE_OF_EVENT, e, sg);
     }
 }
+
+
+//
 
 rule "leavingPlace"{
 	when{
@@ -33,15 +42,17 @@ rule "leavingPlace"{
 	}
 }
 
-rule "shouldBeGoingRetract"{
+/*rule "shouldBeGoingRetract"{
 	when{
 		gt : isGoingTo {placeId : placeId, personId: personId};
-		sg : shouldGoTo sg.personId == personId && sg.placeId != placeId;
+		sg : shouldGoTo sg.personId == personId && sg.placeId != placeId || debug(gt,sg);
 	}then{
-		console.log("************** retract " + sg);
+		console.log("************** retract shouldgoto" );
+		console.log(sg);
+		console.log(gt);
 		retract(sg);
 	}
-}
+}*/
 
 rule "isAtPlaceRule"{
 	when{
@@ -55,14 +66,14 @@ rule "isAtPlaceRule"{
 }
 
 
-
-rule "retractshouldBeGoingToBecauseofFriend"{
-	when{
-		f1: friends {personId1: p1, personId2: anOtherPerson}; //u have at least 2 friends there
+/*f1: friends {personId1: p1, personId2: anOtherPerson}; //u have at least 2 friends there
 		f2: friends f2.personId2 == anOtherPerson {personId1: p2};
 		iap1: isAtPlace iap1.personId == p1 {placeId : place1};
-		iap2: isAtPlace iap2.personId == p2 && iap2.placeId == place1;
-		iap3: isAtPlace iap3.personId == anOtherPerson && iap3.placeId == place1;
+		iap2: isAtPlace iap2.personId == p2 && iap2.placeId == place1;*/
+//u retract the shouldgoto once you get there, regardless of the position of your friend
+rule "retractshouldBeGoingToBecauseofFriend"{
+	when{
+		iap3: isAtPlace {personId: anOtherPerson, placeId : place1};
 		sg: shouldGoTo sg.personId == anOtherPerson && sg.placeId == place1;
 	}then{
 		console.log("************** retract shouldgoto" + sg);
@@ -80,7 +91,7 @@ rule "retractshouldBeGoingToBecauseofFriend"{
 rule "shouldBeGoingToBecauseofFriend"{
 	when{
 		f1: friends {personId1: p1, personId2: anOtherPerson}; //u have at least 2 friends there
-		f2: friends f2.personId2 == anOtherPerson && f2.personId1 != p1 {personId1: p2};
+		f2: friends f2.personId1 != p1 && f2.personId2 == anOtherPerson {personId1: p2};
 		iap1: isAtPlace iap1.personId == p1 {placeId : place1};
 		iap2: isAtPlace iap2.personId == p2 && iap2.placeId == place1;
 		not (iap3: isAtPlace iap3.personId == anOtherPerson && iap3.placeId == place1);
@@ -88,10 +99,10 @@ rule "shouldBeGoingToBecauseofFriend"{
 		hc: hasCoordinates hc.placeId == place1 && closeEnough(personLat, personLong, hc.latBL, hc.longBL, hc.latUR, hc.longUR,CLOSE_ENOUGH_DISTANCE);
 		not( sg : shouldGoTo sg.personId == anOtherPerson && sg.placeId == place1);
 	}then{
-		assert( new shouldGoTo({personId : f1.personId2, placeId: iap1.placeId }));
+		var sg = new shouldGoTo({personId : f1.personId2, placeId: iap1.placeId });
+		assert( sg);
 		console.log("**asserted shouldGoTo");
-		debugger;
-		notify(iatc1, SHOULD_BE_GOING_TO_BECAUSE_OF_FRIEND, {friend1 : f1, friend2: f2});
+		notify(iatc1, SHOULD_BE_GOING_TO_BECAUSE_OF_FRIEND, {friend1 : f1.personId1, friend2: f2.personId1, placeId: iap1.placeId}, sg);
 	}
 }
 
@@ -101,7 +112,7 @@ rule "avoid"{
 		iap : isAtPlace iap.personId == avoided {placeId : placetoAvoid};
 		ic: isAtCoordinates avoider == ic.personId {lat: lat , long: long};
 		hc : hasCoordinates hc.placeId == placetoAvoid && closeEnough(lat,long, hc.latBL, hc.longBL, hc.latUR, hc.longUR,CLOSE_ENOUGH_DISTANCE);
-		//not (sg : shouldNotGoTo sg.personId == avoider && sg.placeId == placeToAvoid);
+		not (sg : shouldNotGoTo sg.personId == avoider && sg.placeId == placeToAvoid);
 	}then{
 		assert (new shouldNotGoTo({personId: wa.avoider , placeId:iap.placetoAvoid})); //gets retracted after being send to the client
 		console.log("**asserted shouldnot GoTo");
@@ -132,16 +143,15 @@ rule "closeFriend" {
 		iac2 : isAtCoordinates iac2.personId == anOtherPerson && checkDistance(lat,long,iac2.lat,iac2.long,CLOSE_ENOUGH_DISTANCE);
 		not (ncf : notifyCloseFriend ncf.personIdNotified == person && ncf.personIdNotification == anOtherPerson);
 	}then{
-		debugger;
+
 		console.log(" close friend assert***");
-		assert (new notifyCloseFriend({personIdNotified: f1.personId1 , personIdNotification: iac2})); 
+		var n = new notifyCloseFriend({personIdNotified: f1.personId1 , personIdNotification: f1.personId2});
+		assert (n); 
 		console.log(" close friend assert***");
-		notify(f1, FRIEND_CLOSE, iac2);
+		notify(f1, FRIEND_CLOSE, iac2,n);
 	}
 }
-function deubug(){
-	debugger;
-}
+
 //retract because of time
 rule "retracttaketram too late" {
 	when{
@@ -172,9 +182,9 @@ rule "retracttaketram too far" {
 		console.log("*** retract notifyPT");
 	}
 }
-rule "taketram too far" {
+rule "taketram" {
 	when{
-		ie : isEvent {eventId: eventId, placeId: placeId, startTime: startTime, endTime:endTime};
+		ie : isEvent	 {eventId: eventId, placeId: placeId, startTime: startTime, endTime:endTime};
 		ip : isPartecipating ip.eventId == eventId {personId:personId};
 		gh: goHomeBy gh.personId==personId {publicTransportation: publicTransportation, direction: direction};
 		tt : timeTable tt.publicTransportation == publicTransportation && tt.direction == direction {time: time, lat:lat, long:long};
@@ -183,7 +193,25 @@ rule "taketram too far" {
 		not(npt: notifyPT npt.personIdNotified == personId &&  npt.publicTransportation == publicTransportation && npt.direction == direction && npt.time == time);
 	}then{
 		console.log("*** assert notifyPT");
-		assert(new notifyPT({personIdNotified: ip.personId, publicTransportation: gh.publicTransportation, direction: timeTable.direction, time : timeTable.time}));
-		notify(ip, SHOULD_TAKE_TRAM, tt);
+		var n = new notifyPT({personIdNotified: ip.personId, publicTransportation: gh.publicTransportation, direction: timeTable.direction, time : timeTable.time});
+		assert(n);
+		notify(iat, SHOULD_TAKE_TRAM, tt,n);
+	}
+}
+
+
+
+rule "forwardEvent" {
+	when{
+		ie : isEvent {eventId: eventId, placeId: placeId, startTime: startTime, endTime:endTime};
+		f1: friends   {personId2: personId ,personId1: anOtherPerson}; 
+		ip : isPartecipating ip.eventId == eventId && personId == personId || debug(ie,f1,ip);
+		not (ip : isPartecipating ip.eventId == eventId && personId == anOtherPerson);	
+		not (ne : notifyEvent ne.eventId == eventId && personId == anOtherPerson);
+	}then{
+		console.log("assert notify event");
+		var n = new notifyEvent({eventId: eventId, placeId: placeId, startTime: startTime, endTime:endTime});
+		assert(n);
+		notify(f1,NEW_EVENT,ie,n);
 	}
 }

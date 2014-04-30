@@ -1,5 +1,5 @@
-//var nools = require("./nools/index");
-var nools = require('nools');
+var nools = require("./nools/index");
+//var nools = require('nools');
 var path = require('path');
 var Primus = require('primus');
 var http = require("http");
@@ -10,6 +10,9 @@ var url = require("url"),
 var fs = require('fs');
 
 
+var factsPerUser = [];
+
+var globalUID = 0;
 var server;
 var templateId = 0;
 var objectId = 0;
@@ -52,6 +55,10 @@ var UPDATE_FACT_SERVER = 12312
 
 var DISPOSE  = 12313
 
+var USER_ID                   = 12314;
+
+var  NEW_USER_ID = 12315;
+
 var openWebosockets = 0;
 /*****
 benchmark variable
@@ -74,7 +81,7 @@ var server = http.createServer(function (request, response) {
 	
 	var filePath = '.' + request.url;
 	if (filePath == './')
-		filePath = './html/start.html';
+		filePath = './html/index.html';
 	var extname = path.extname(filePath);
 	var contentType = 'text/html';
 	switch (extname) {
@@ -111,16 +118,25 @@ var server = http.createServer(function (request, response) {
 
 var primus = new Primus(server, { transformer: 'websockets', parser: 'JSON' });
 
+//primus.save('/primus.js');
+
 primus.on('disconnection', function (spark) {
-	console.log("spark id " + spark.id + "disconnected");
+	
+	console.log("spark uid " + spark.uid + "disconnected");
+	for (var i = factsPerUser[spark.uid].length - 1; i >= 0; i--) {
+		if(!factsPerUser[spark.uid][i].leased)
+		try{
+			session.retract(factsPerUser[spark.uid][i]);
+		}catch(e){
+			//the fact wansn't there
+		}
+	};
+
 });
 
-primus.on('reconnection', function (spark) {
-  console.log('reconnecting', spark.id);
-});
 
 primus.on('connection', function(spark) {
-	spark.customCallBack = [];
+//	spark.customCallBack = [];
 	console.log("id ",spark.id);
 	spark.on('data', function(message) {       
         	dispatch(message,spark);
@@ -135,13 +151,14 @@ primus.on('connection', function(spark) {
     	}
 		//console.log("closed");
 	});
-
+/*
 	spark.addEventListener = function(event,cb){
 		spark.customCallBack[event] = cb;
-	}
+	}*/
 });
 
 console.log('Server running at http://127.0.0.1:8888/');
+
 
 function defineTemplate(name,obj,options){
 	var template = function (opts){
@@ -152,9 +169,19 @@ function defineTemplate(name,obj,options){
             }
         }
         this.__clientObjectId = opts.objectId;
+        this.leased = false;
         this.objectId = objectId++;
 
 	};
+
+	template.prototype.cancel = function(){
+		debugger;
+		var that = this;
+		webSockets[this.__uid].bufferedMessages = webSockets[this.__uid].bufferedMessages.filter(function(element){
+			element.id == that.objectId;
+		});
+		
+	}
 	template.prototype.__type = name;
 	template.prototype.__clientObjectId;
 	template.prototype.__templateId = templateId;
@@ -172,11 +199,13 @@ function defineTemplate(name,obj,options){
 }
 
 function updateDate(){
-	dates = session.getFacts(Date);
-	if(dates.length > 0)
-		session.retract(dates[0]);
-	session.assert(new Date());
+	var date = session.assert(new Date());
+	setTimeout(function(){
+		session.retract(date)
+	},59 * 1000);
 	setTimeout(updateDate,60 * 1000);
+
+	
 }
 
 function initNools(file,scope){
@@ -200,7 +229,7 @@ function initNools(file,scope){
 		//console.log(data);
 		var type = getType(data);
 		sendToListeners(type,data);
-		mySend(webSockets[data.objectId],data,UPDATE_FACT_SERVER);
+		mySend(webSockets[data.__uid],data,UPDATE_FACT_SERVER);
 		if(data.person <= 0)
 			debugger;
 	});
@@ -280,6 +309,33 @@ function dispatch(message,ws){
     }*/
     var type = getType(message);
     switch(type){
+    	case USER_ID:
+    		var messageUID = message.data;
+    		if(messageUID == -1){
+    			var newUID= ++globalUID;
+    			mySend(ws,newUID,NEW_USER_ID);
+    			webSockets[newUID] = ws;
+    			ws.bufferedMessages = [];
+    			ws.uid = newUID;
+    			factsPerUser[newUID] = [];
+    		}else{
+    			//reconnection
+    			//get all the messages, reassart all the facts, reassert all the messages
+    			console.log("reconnection of uid " + messageUID);
+    			if(webSockets[messageUID] && webSockets[messageUID].bufferedMessages){
+    				var bufferedMessages = webSockets[messageUID].bufferedMessages;
+    				//check for expired messages
+    				for(i = 0 ; i < bufferedMessages.length ; i++)
+    					mySend(ws, bufferedMessages[i].data, bufferedMessages[i].__type,bufferedMessages[i].id) ;	
+    			}
+    			ws.uid = messageUID;
+    			webSockets[messageUID] = ws;
+    			for (var i = factsPerUser[messageUID].length - 1; i >= 0; i--) {
+					if(!factsPerUser[messageUID][i].leased)
+						session.assert(factsPerUser[messageUID][i]);
+				};
+    		}
+    		break;
     	case DISPOSE:
     		//session.dispose();
     		session = flow.getSession();
@@ -325,19 +381,36 @@ function dispatch(message,ws){
 	    		}
 	    	}
 
-    		var templateName = getTemplateNameFromMessage(message)
+    		var templateName = message.data.fact.__type;
 		    if((index = indexofTemplatebyName(templateName)) == -1){
 				throw "template not present in the list of template";
 				//more checking that all the field are instantied, maybe
 			}else{
+				var uid = message.uid;
+				obj = new templates[index](message.data.fact);
+				if(message.data.options != undefined)
+					if(message.data.options.leaseTime != undefined){
+						factsPerUser[uid] = factsPerUser[uid].filter(function(element){
+							element.__uid == uid
+						});
+
+						setTimeout(message.data.options.leaseTime,function(){
+							//should check id if it is still there
+							session.retract(obj);
+						});
+						obj.leased = true;
+					}
 				
-				obj = new templates[index](message.data);
+				
+				
 				console.log(obj);
 				//if(templates[index].automaticallyAsserted)
 				//save the websocket for a possible answer 
-				webSockets[obj.objectId] = ws;
-				var cb = sendId(ws);
-				myAssert(obj,cb);
+				//webSockets[obj.objectId] = ws;
+				var cb = sendId(ws,obj.__clientObjectId);
+				obj = myAssert(obj,cb);
+				obj.__uid = uid;
+				factsPerUser[uid].push(obj);
 
 				/*var Passenger = flow.getDefined("Passenger");
 			    var Taxi = flow.getDefined("Taxi");
@@ -350,7 +423,7 @@ function dispatch(message,ws){
 			    });
 			    session.ruleAtRunTime(flow.__rules[flow.__rules.length-1]);*/
 
-				checkCBandCall(ws.customCallBack[type],obj);
+				//checkCBandCall(ws.customCallBack[type],obj);
 			}
 			break;
 		case REQUIRE_TEMPLATE:
@@ -400,6 +473,7 @@ function dispatch(message,ws){
 			
 			break;
 		case RETRACT_FACT:
+			debugger;
 			var id = message.data.id;
 			var type = message.data.type;
 			session.retractByMongoId(id,type);
@@ -424,10 +498,10 @@ function modify(fact){
 	session.modifyByMongoId(fact);
 }
 
-function sendId(ws){
+function sendId(ws,clientId){
 	//mongo,nools,mine
 	return function(_id, id,objectId){
-		mySend(ws,{id:id, _id:_id, objectId:objectId},NEW_FACT_ID);
+		mySend(ws,{clientId: clientId, id:id, _id:_id, objectId:objectId},NEW_FACT_ID);
 	}
 
 }
@@ -439,7 +513,7 @@ function plusMinutes(minutes,date){
 	return startTimeMinus10;
 }
 
-function currentTimeIn(currentTime, startTime , endTime ){
+function currentTimeIn(currentTime, startTime , endTime ,caller){
 	var startTime = new Date(startTime);
 	var startTimeMinus10 = new Date(startTime);
 	var durationInMinutes = 10;
@@ -534,25 +608,28 @@ function notifyAll(fact1 , fact2){
 var countMatches = 0;
 //@target and @message are two instance of 2 (or the same) templates
 //notify the sender of the obj target with message
-function notify(target,type, message){
-	debugger;
-	if(message){
-		if(typeof webSockets[target.objectId] == 'undefined'){
-			debugger
-			throw "no websocket associated to " + target;
-		}else{
-			mySend(webSockets[target.objectId],message,type); //MESSAGE.TEMPLATEID
-		}	
-	}else{
+//object is to get the id of the message for successive retract
+function notify(target,type, message,object){
+	object.__uid = target.__uid;
+	if(!object){
 		message = type;
-		if(typeof webSockets[target.objectId] == 'undefined'){
+		type = getType(message)
+	}
+	if(typeof webSockets[target.__uid] == 'undefined'){
+		throw "no websocket associated to " + target;
+	}else{
+		mySend(webSockets[target.__uid],message,type,object.objectId); 
+	}	
+	/*}else{
+		message = type;
+		if(typeof webSockets[target.__uid] == 'undefined'){
 			debugger
 			throw "no websocket associated to " + target;
 		}else{
 		
-				mySend(webSockets[target.objectId],message,getType(message)); //MESSAGE.TEMPLATEID
+				mySend(webSockets[target.__uid],message,,object.objectId); 
 		}	
-	}
+	}*/
 	
 }
 
@@ -575,12 +652,15 @@ function compile(scope,file){
 }
 
 //if we decide to send always template instances we don't need event
-function mySend(ws,message,event){
+function mySend(ws,message,event,id){
 	//if(typeof event == 'string')
 		//message.__type = event;	
-	obj = {data: message, __type : event}
-	//if(ws.readyState == ws.primus.Socket.OPEN)
+	obj = {data: message, __type : event, id:id}
+	if(ws.readyState == ws.primus.Socket.OPEN){
 		ws.write(JSONfn.stringify(obj));
+	}else{
+		ws.bufferedMessages.push(obj);
+	}
 }
 
 
