@@ -19,17 +19,26 @@ var NEW_USER_ID               = 12315;
 
 var factId = 0
 var fact
+var lat,long;
 //keep all the aserted fact
 var assertedFacts = [];
 var idListener = 0;
 var objectId = 0;
 var primus;
+var idCoordinates;
+var timeCoordinates;
+var sendCoordinates = false;
 var uid = -1;
 //API
+
 var addListener,
+    updateCoordinatesTimeout,
+    onConnection,
+    onConnectionFunction,   
+    sendCoordinatesEvery,
     bufferedMessages = [],
     requireTemplate;
-
+/*
 
 requirejs.config({
     //By default load any module IDs from js/lib
@@ -42,9 +51,10 @@ requirejs.config({
     paths: {
         app: '../app'
     }
-});
+});*/
 //http://127.0.0.1:8888/primus/primus.js
 require(["../js/reflect.js","/primus/primus.js","../js/jsonfn.js"], function(reflect,Primus) { //no need to add a 3rd paramenter for jsonfn because it creates a global variable
+    updateCoordinates();
     primus = new Primus('http://localhost:8888/' ,{
           reconnect: {
               maxDelay: Infinity // Number: The max delay for a reconnect retry.
@@ -54,6 +64,7 @@ require(["../js/reflect.js","/primus/primus.js","../js/jsonfn.js"], function(ref
 
 
     primus.on('disconnect', function(msg){
+      clearTimeout(updateCoordinatesTimeout);
       console.log(msg +" disconnected");
     });
 
@@ -61,17 +72,24 @@ require(["../js/reflect.js","/primus/primus.js","../js/jsonfn.js"], function(ref
       console.log('Connection is alive and kicking');
       var string = /*JSONfn.stringify(*/{data: uid, __type : USER_ID, uid : uid};
       primus.write(string);
-      for (var i = 0 ; i < bufferedMessages.length ; i++ ){
-          primus.send(bufferedMessages[i]);
-      };
-      bufferedMessages = [];
-      //send that you are done with it
+      if(uid  != -1 ){ //in this case is the first time I connect thre won't be any bufferedMessages
+        for (var i = 0 ; i < bufferedMessages.length ; i++ ){
+              primus.write(bufferedMessages[i]);
+          };
+          bufferedMessages = [];
+          //TODO: send that you are done with it
+      }
+      if(sendCoordinates){
+        sendCoordinatesEvery(idCoordinates,timeCoordinates);
+      }
+      
       
     });
 
 
     primus.on('connection', function(msg){
       console.log(msg +" connected");
+      onConnectionFunction();
     });
 
     primus.on('end', function(msg){
@@ -92,9 +110,13 @@ require(["../js/reflect.js","/primus/primus.js","../js/jsonfn.js"], function(ref
     //the module value for "helper/util".
 
     function Listener(id,type){
-    this.idListener = id;
-    this.type = type;
-    this.drop = dropListener;
+        this.idListener = id;
+        this.type = type;
+        this.drop = dropListener;
+    }
+
+    onConnection = function(f){
+        onConnectionFunction = f;
     }
 
     var registerCallback = [];
@@ -162,6 +184,17 @@ require(["../js/reflect.js","/primus/primus.js","../js/jsonfn.js"], function(ref
             return new Listener(idListener, type);
         }
 
+        sendCoordinatesEvery = function (id, time){
+            updateCoordinates();
+            idCoordinates = id;
+            timeCoordinates = time;
+            sendCoordinates = true;
+            requireTemplate("isAtCoordinates",function(err,isAtCoordinates){
+               var position = new isAtCoordinates({personId: id, lat: getLat(),long: getLong()},{retractOnDisconnection:true });
+               updateCoordinatesTimeout = setTimeout(updateFactCoordinate,time,position,time);
+            });
+            
+        }
 
         //it just tell what to do in case we receive a fact of acertain type, doesn't talk to the server
         addListener = function (event,cb){
@@ -230,7 +263,22 @@ require(["../js/reflect.js","/primus/primus.js","../js/jsonfn.js"], function(ref
                                 var fact = new target(args[0]);
                                 assertedFacts[fact.objectId] = fact;
                                 //args[1] is the option
-                                sendNewFact(fact,args[1]);                                                
+                                var opts = args[1];
+
+                                if(opts && opts.retractWith != undefined){
+                                    var f = function(){//it could be the the other fact doens't have a mongoid yet
+                                        if(opts.retractWith._id != undefined){
+                                            opts.retractWith = opts.retractWith._id;
+                                            sendNewFact(fact,opts);                                                
+                                        }
+                                        else
+                                            setTimeout(f,1000);
+                                    }
+                                    f();
+                                }else{
+                                    sendNewFact(fact,opts);                                                
+                                }
+                                
                                 
                                 
                                 var proxy = Proxy(fact,
@@ -239,7 +287,7 @@ require(["../js/reflect.js","/primus/primus.js","../js/jsonfn.js"], function(ref
                                                 target[name] = val;
                                                 console.log('I am modifying ' + name);
                                                 if(name != "_id") //in this case I am hust saving the id that the server gave me back, no need to inform the server about i
-                                                    modify({name : val});
+                                                    modify(target);
                                             }
                                         },
                                         get: function(obj, prop) {
@@ -339,7 +387,7 @@ require(["../js/reflect.js","/primus/primus.js","../js/jsonfn.js"], function(ref
         }
 
     var modified = 0;
-    function modify(singleModification){
+    function modify(fact){
         modified ++;
         var temp = modified;
         /*if(modification)
@@ -353,7 +401,7 @@ require(["../js/reflect.js","/primus/primus.js","../js/jsonfn.js"], function(ref
                 modified = 0;
             }
                 
-        },2);
+        },500);
     }
 
     function checkDiff(obj){
@@ -393,6 +441,15 @@ require(["../js/reflect.js","/primus/primus.js","../js/jsonfn.js"], function(ref
         addListener(NEW_FACT_ID,saveId)
     }
 
+    function updateFactCoordinate(fact,time){
+
+        fact.lat = getLat();
+        fact.long = getLong();
+        setTimeout(updateFactCoordinate,time,fact);
+    }
+
+    
+
 
     /*****util *******/
     function indexofTemplate(type){
@@ -402,6 +459,21 @@ require(["../js/reflect.js","/primus/primus.js","../js/jsonfn.js"], function(ref
         return -1;
     }
 
+    function updateCoordinates(){
+        navigator.geolocation.getCurrentPosition(function(position){
+            lat = position.coords.latitude;
+            long = position.coords.longitude; 
+            setTimeout(updateCoordinates,1000);
+        });
+    }
+
+    function getLat(){
+        return lat;
+    }
+
+    function getLong(){
+        return long;
+    }
 
     function dispose(){
         mySend({},DISPOSE);
@@ -415,12 +487,15 @@ require(["../js/reflect.js","/primus/primus.js","../js/jsonfn.js"], function(ref
     if(typeof module != 'undefined'){
         exports.requireTemplate = requireTemplate;
         exports.dispose = dispose;
+        exports.onConnection = onConnection;
+        exports.sendCoordinatesEvery = sendCoordinatesEvery;
         exports.addListener = addListener;
-    
     }
 
     return {
         addListener:addListener,
+        onConnection: onConnection,
+        sendCoordinatesEvery: sendCoordinatesEvery,
         requireTemplate: requireTemplate
     }
 

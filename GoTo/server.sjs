@@ -27,14 +27,14 @@ tmp$363['placeId'] = undefined;
 //acces to it, plus nodejs cache the require object so u just have a different pointer to the same thing
 var lib$364 = require('./lib');
 var isAtPlace$367 = lib$364.defineTemplate('isAtPlace', tmp$363);
-var tmp$369 = {};
+/*var tmp$369 = {};
 tmp$369['personId'] = undefined;
 tmp$369['lat'] = undefined;
 tmp$369['long'] = undefined;
 //ugly solution but the problem otherwise would be that, since this are hygenic macro, the var lib outside would be renamed so I couldn't 
 //acces to it, plus nodejs cache the require object so u just have a different pointer to the same thing
 var lib$370 = require('./lib');
-var isAtCoordinates$373 = lib$370.defineTemplate('isAtCoordinates', tmp$369);
+var isAtCoordinates$373 = lib$370.defineTemplate('isAtCoordinates', tmp$369);*/
 var tmp$375 = {};
 tmp$375['placeId'] = undefined;
 tmp$375['latBL'] = undefined;

@@ -11,8 +11,10 @@ var fs = require('fs');
 
 
 var factsPerUser = [];
-
+var leasedFacts = {};
+var retractWith = {};
 var globalUID = 0;
+var updateFromClient = false;
 var server;
 var templateId = 0;
 var objectId = 0;
@@ -20,8 +22,11 @@ var objectId = 0;
 var webSockets = [];
 //array with all the defined template
 var templates = [];
-var session,flow; 
+var session,flow;
 
+var isAtCoordinates = {}
+var isDisconnected = {};
+var disconnected = {};
 //for each template I have an array of websockets (the clients) interested to them
 var listeners = []; 
 //vector that keep track of the webspcket of the client that assert new rule at run time
@@ -123,14 +128,17 @@ var primus = new Primus(server, { transformer: 'websockets', parser: 'JSON' });
 primus.on('disconnection', function (spark) {
 	
 	console.log("spark uid " + spark.uid + "disconnected");
+	disconnected[spark.uid] = session.assert(new isDisconnected({uid : spark.uid}));
 	for (var i = factsPerUser[spark.uid].length - 1; i >= 0; i--) {
-		if(!factsPerUser[spark.uid][i].leased)
-		try{
-			session.retract(factsPerUser[spark.uid][i]);
-		}catch(e){
-			//the fact wansn't there
-		}
+		//now it s implemented in nools
+		/*if(factsPerUser[spark.uid][i].retractOnDisconnection) 
+			try{
+				session.retract(factsPerUser[spark.uid][i]);
+			}catch(e){
+				//the fact has already been retracted
+			}*/
 	};
+
 
 });
 
@@ -173,7 +181,7 @@ function defineTemplate(name,obj,options){
         this.objectId = objectId++;
 
 	};
-
+	//when you call cancel it eliminates from the buffered messages all the messages related to the fact
 	template.prototype.cancel = function(){
 		debugger;
 		var that = this;
@@ -187,8 +195,6 @@ function defineTemplate(name,obj,options){
 	template.prototype.__templateId = templateId;
 	template.__type = name;
 	template.__templateId = templateId;
-	//if(options.automaticallyAsserted == true)
-	//	template.automaticallyAsserted = true;
 	templateId++;
 	for(i in obj){
 		template.prototype[i] = 'not yet instantiated'
@@ -211,10 +217,15 @@ function updateDate(){
 function initNools(file,scope){
 	if(typeof scope == 'undefined')
 		scope = {};
-	flow = compile(scope,file);
 
-	
-	session = flow.getSession();
+	flow = compile(scope,file);
+	 flow.rule("retractLeased", {salience: 7}, [
+        [isDisconnected, "id", {uid:"uid"}],
+        [Object, "f", "f.__uid == uid && f.retractOnDisconnection == true" ]
+    ], function (facts) {
+        this.retract(facts.f);
+    });
+	session = flow.getSession(addTimeLeasedFact);
 	updateDate();
 	session.on("assert", function(data){
 		//console.log("data asserted:");
@@ -225,13 +236,20 @@ function initNools(file,scope){
 	});
 
 	session.on("modify", function(data){
-		//console.log("data asserted:");
-		//console.log(data);
-		var type = getType(data);
-		sendToListeners(type,data);
-		mySend(webSockets[data.__uid],data,UPDATE_FACT_SERVER);
-		if(data.person <= 0)
-			debugger;
+		if(updateFromClient)
+			updateFromClient = false;
+		else{
+			var type = getType(data);
+			sendToListeners(type,data);
+			mySend(webSockets[data.__uid],data,UPDATE_FACT_SERVER);
+		}
+	});
+
+	session.on("retract",function(fact){
+		if(retractWith[fact._id] != undefined)
+			for (var i = retractWith[fact._id].length - 1; i >= 0; i--) {
+				session.retract(retractWith[fact._id][i]);
+			}
 	});
 	
 	if(!benchmark){
@@ -244,13 +262,6 @@ function initNools(file,scope){
 		            console.log(err.stack);
 		        }
 		    );
-	}else{
-		session.on("retract",function(fact){
-			if(webSockets[fact.objectId]){
-				//webSockets[fact.objectId].close();
-				//webSockets.splice(fact.objectId, 1);
-			}
-		});
 	}
 	return session;
 
@@ -299,19 +310,13 @@ function dispatch(message,ws){
 	//console.log('received : ');
 	//console.log(message);
 	//message = JSONfn.parse(message);
-	/*
-	if(message.data.time != undefined){
-		var date = new Date();
-    	date.setMinutes((message.data.time.split(':'))[1]);
-    	date.setHours((message.data.time.split(':'))[0]);
-    	date.setSeconds(0);
-    	message.data.time = date;
-    }*/
+	
     var type = getType(message);
     switch(type){
     	case USER_ID:
     		var messageUID = message.data;
     		if(messageUID == -1){
+    			//new connections
     			var newUID= ++globalUID;
     			mySend(ws,newUID,NEW_USER_ID);
     			webSockets[newUID] = ws;
@@ -322,18 +327,20 @@ function dispatch(message,ws){
     			//reconnection
     			//get all the messages, reassart all the facts, reassert all the messages
     			console.log("reconnection of uid " + messageUID);
-    			if(webSockets[messageUID] && webSockets[messageUID].bufferedMessages){
+    			if(disconnected[uid])
+    				session.retract(disconnected[uid]);
+    			/*if(webSockets[messageUID] && webSockets[messageUID].bufferedMessages){
     				var bufferedMessages = webSockets[messageUID].bufferedMessages;
     				//check for expired messages
     				for(i = 0 ; i < bufferedMessages.length ; i++)
     					mySend(ws, bufferedMessages[i].data, bufferedMessages[i].__type,bufferedMessages[i].id) ;	
-    			}
+    			}*/
     			ws.uid = messageUID;
     			webSockets[messageUID] = ws;
-    			for (var i = factsPerUser[messageUID].length - 1; i >= 0; i--) {
+    			/*for (var i = factsPerUser[messageUID].length - 1; i >= 0; i--) {
 					if(!factsPerUser[messageUID][i].leased)
 						session.assert(factsPerUser[messageUID][i]);
-				};
+				};*/
     		}
     		break;
     	case DISPOSE:
@@ -388,18 +395,7 @@ function dispatch(message,ws){
 			}else{
 				var uid = message.uid;
 				obj = new templates[index](message.data.fact);
-				if(message.data.options != undefined)
-					if(message.data.options.leaseTime != undefined){
-						factsPerUser[uid] = factsPerUser[uid].filter(function(element){
-							element.__uid == uid
-						});
 
-						setTimeout(message.data.options.leaseTime,function(){
-							//should check id if it is still there
-							session.retract(obj);
-						});
-						obj.leased = true;
-					}
 				
 				
 				
@@ -408,10 +404,33 @@ function dispatch(message,ws){
 				//save the websocket for a possible answer 
 				//webSockets[obj.objectId] = ws;
 				var cb = sendId(ws,obj.__clientObjectId);
-				obj = myAssert(obj,cb);
-				obj.__uid = uid;
-				factsPerUser[uid].push(obj);
+				var fact;
+				debugger;
+				if(message.data.opts != undefined){
+					if(message.data.opts.leaseTime != undefined){
+						cb = function(_id, id,objectId){
+							sendId(ws,fact.__clientObjectId);
+							addTimeLeasedFact(_id,fact,message.data.opts.leaseTime);
+						}
+					}
+					
+				}
+				fact = myAssert(obj,cb);
+				fact.__uid = uid;
+				factsPerUser[uid].push(fact);
+				if(message.data.opts != undefined ){
+					if(message.data.opts.retractOnDisconnection != undefined){
+						fact.retractOnDisconnection = true;
+					}
 
+					if(message.data.opts.retractWith != undefined){
+						if(retractWith[message.data.opts.retractWith] == undefined)
+							retractWith[message.data.opts.retractWith] = [];
+						retractWith[message.data.opts.retractWith].push(fact);
+
+						
+					}
+				}
 				/*var Passenger = flow.getDefined("Passenger");
 			    var Taxi = flow.getDefined("Taxi");
 			    flow.rule("Test", [["Passenger", "p", "p.destination == 'VUB' && p.price < 11 && p.person > 2", {destination:"pd"}],
@@ -448,6 +467,9 @@ function dispatch(message,ws){
 			break;
 		case UPDATE_FACT:
 			var templateName = getTemplateNameFromMessage(message)
+			updateFromClient = true;
+			console.log("updating fact");
+			console.log(message.data);
 		    if((index = indexofTemplatebyName(templateName)) == -1){
 				throw "template not present in the list of template";
 				//more checking that all the field are instantied, maybe
@@ -456,6 +478,7 @@ function dispatch(message,ws){
 				//obj.objectId = message.data.objectId;
 				obj._id = message.data._id;
 				//obj.id = message.data.id;
+
 				modify(obj);
 			}
 			break;
@@ -494,7 +517,33 @@ function dispatch(message,ws){
 	
 }
 
+function addTimeLeasedFact(_id,fact,leaseTime){
+	leasedFacts[_id] = {}
+	leasedFacts[_id].leaseTime = leaseTime;
+	leasedFacts[_id].setTimeoutID = setTimeout(function(){
+		retract(fact);
+	},leaseTime);
+	leasedFacts[_id].fact = fact;
+	fact.leased = true;	
+}
+
+function retract(fact){
+	try{
+		session.retract(fact);
+	}catch(e){
+		//already retracted
+	}
+}
+
 function modify(fact){
+	var _id = fact._id;
+	if(leasedFacts[_id] != undefined){
+		clearTimeOut(leasedFacts[_id].setTimeoutID);
+		leasedFacts[_id].setTimeoutID = setTimeout(leasedFacts[_id].leaseTime,function(){
+			//should check id if it is still there
+			retract(fact);
+		});
+	}
 	session.modifyByMongoId(fact);
 }
 
@@ -648,6 +697,15 @@ function compile(scope,file){
 		for(i in templates)
 			define[templates[i].prototype.__type] = templates[i];
 	//}
+	var tmp = {}
+	tmp['personId'] = undefined;
+	tmp['lat'] = undefined;
+	tmp['long'] = undefined;
+	isAtCoordinates = defineTemplate('isAtCoordinates',tmp);
+	define["isAtCoordinates"] = isAtCoordinates;
+	isDisconnected['uid'] = undefined;
+	isDisconnected = defineTemplate('isDisconnected', isDisconnected);
+	define["isDisconnected"] = isDisconnected;
 	return nools.compile(file,{define: define, scope: scope});
 }
 

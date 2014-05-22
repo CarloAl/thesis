@@ -54,18 +54,15 @@ var FlowContainer = declare({
             return this;
         },
 
-        getSession: function () {
-            var flow = new Flow(this.name, this.conflictResolutionStrategy,this);
+        getSession: function (addTimeLeasedFact) {
+            var flow = new Flow(this.name, this.conflictResolutionStrategy,this,addTimeLeasedFact);
             forEach(this.__rules, function (rule) {
                 flow.rule(rule);
             });
             flow.assert(new InitialFact());
-            
-            
-            
-            for (var i = 0, l = arguments.length; i < l; i++) {
+            /*for (var i = 0, l = arguments.length; i < l; i++) {
                 flow.assert(arguments[i]);
-            }
+            }*/
             return flow;
         },
 

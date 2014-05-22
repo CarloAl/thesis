@@ -226,7 +226,7 @@ declare({
                 if(err) 
                     throw new Error(err);
                 //when u assert the initial fact there's no cb
-                if(cb != undefined)
+                if(typeof cb == 'function')
                     cb(value._id, value.id,value.object.objectId);
                 flow.done();
                 flow.emit("assert", fact);

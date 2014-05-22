@@ -1,26 +1,26 @@
 var lib  = require("./lib");
 var init = require ("./init");
 
-myVar wantToAvoid = {avoiderId, avoidedId};
-myVar isA = {personId, Category};
-myVar friends = {personId1, personId2};
-myVar isAtPlace = {personId, placeId};
-myVar isAtCoordinates = {personId, lat,long};
-myVar hasCoordinates = {placeId, latBL, longBL, latUR, longUR};
-myVar isGoingTo = {personId, placeId};
-myVar shouldGoTo = {personId, placeId};
-myVar shouldNotGoTo = {personId, placeId};
-myVar isEvent = {eventId, placeId, startTime, endTime};
-myVar isPartecipating = {personId, eventId};
-myVar timeTable = {publicTransportation, direction, time, lat, long};
-myVar goHomeBy = {personId, publicTransportation, direction};
-myVar notifyCloseFriend = {personIdNotified, personIdNotification}; //should rename isCloseTo
-myVar notifyPT = {personIdNotified, publicTransportation, direction, time};
-myVar notifyEvent = {eventId, placeId,  startTime, endTime};	
+template wantToAvoid = {avoiderId, avoidedId};
+template isA = {personId, Category};
+template friends = {personId1, personId2};
+template isAtPlace = {personId, placeId};
+//template isAtCoordinates = {personId, lat,long};
+template hasCoordinates = {placeId, latBL, longBL, latUR, longUR};
+template isGoingTo = {personId, placeId};
+template shouldGoTo = {personId, placeId};
+template shouldNotGoTo = {personId, placeId};
+template isEvent = {eventId, placeId, startTime, endTime};
+template isPartecipating = {personId, eventId};
+template timeTable = {publicTransportation, direction, time, lat, long};
+template goHomeBy = {personId, publicTransportation, direction};
+template notifyCloseFriend = {personIdNotified, personIdNotification}; //should rename isCloseTo
+template notifyPT = {personIdNotified, publicTransportation, direction, time};
+template notifyEvent = {eventId, placeId,  startTime, endTime};	
 
 
 var file = "./rule.nools";
 lib.initNools(file);
 
 //init(hasCoordinates,timeTable);
-// sjs -o server.sjs -m ./macro.js server.js
+

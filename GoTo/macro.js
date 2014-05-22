@@ -9,19 +9,20 @@ macro toString {
   }
 }
 
-macro myVar {
-  rule {  $x = { $y (,) ... } } => { 
-  var tmp = {};
-  (tmp [toString $y] = undefined)(;) ...
-  var lib  = require("./lib");
-  var $x = lib.defineTemplate( toString $x ,tmp)
+macro template {
+  rule {  $x = { $y (,) ... } } => 
+  { 
+    var tmp = {};
+    (tmp [toString $y] = undefined)(;) ...
+    var lib  = require("./lib");
+    var $x = lib.defineTemplate( toString $x ,tmp)
   }
 }
 
-export myVar;
+export factType;
 
 //myVar Taxi = {destintion,time,radius,person,price,long,lat,username,phone}
-
+// sjs -o server.sjs -m ./macro.js server.js
 
 /*
 macro basic {

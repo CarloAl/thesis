@@ -21,8 +21,9 @@ module.exports = declare(EventEmitter, {
 
         asyncAction: 0,
 
-        constructor: function (name, conflictResolutionStrategy,flowContainer) {
+        constructor: function (name, conflictResolutionStrategy,flowContainer,addTimeLeasedFact) {
             this.env = null;
+            this.addTimeLeasedFact = addTimeLeasedFact;
             this.name = name;
             this.__rules = {};
             this.flowContainer = flowContainer;
@@ -66,12 +67,20 @@ module.exports = declare(EventEmitter, {
             this.rootNode.dispose();
         },
 
+        //can be called from nools or from the library
         assert: function (fact,cb) {
+            
+            if(typeof cb != 'function'){
+                var opts = cb;
+                cb = undefined;
+            }
             var that = this;
             this.increaseNumberAsyncAction();
-            //Fiber(function(){
-                that.rootNode.assertFact(that.workingMemory.assertFact(fact,cb,that));
-            //}).run();
+            var mongoFact = that.workingMemory.assertFact(fact,cb,that);
+            if(opts && opts.leaseTime != undefined){
+                main.addTimeLeasedFact(fact._id, fact.object, opts.leaseTime);
+            }
+            that.rootNode.assertFact(mongoFact);
             return fact;
         },
 
@@ -124,7 +133,6 @@ module.exports = declare(EventEmitter, {
             that.workingMemory.retractFact(fact,function(obj){
                 if(obj)
                     that.rootNode.retractFact(obj);
-                
                 that.done();
                 that.emit("retract", fact);
             });
@@ -140,7 +148,7 @@ module.exports = declare(EventEmitter, {
                 that.rootNode.retractFact(fact);
                 that.done();
                 that.executionStrategy.setLooping(false);
-                that.emit("retract", fact.object);
+                that.emit("retract", fact);
                 nextTick(that.executionStrategy.onAlter);
                 return fact;
             }else{
