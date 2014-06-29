@@ -1,4 +1,5 @@
 var nools = require("./nools/index");
+var util = require('util');
 //var nools = require('nools');
 var path = require('path');
 var Primus = require('primus');
@@ -18,6 +19,7 @@ var updateFromClient = false;
 var server;
 var templateId = 0;
 var objectId = 0;
+var factSent = [];
 //array with all the open websocket
 var webSockets = [];
 //array with all the defined template
@@ -63,6 +65,8 @@ var DISPOSE  = 12313
 var USER_ID                   = 12314;
 
 var  NEW_USER_ID = 12315;
+//value of the __type in a websocket message, when the server send a new version of a previously sent fact
+var UPDATE_FACT_PREVIOUSLY_SENT = 12316
 
 var openWebosockets = 0;
 /*****
@@ -128,6 +132,7 @@ var primus = new Primus(server, { transformer: 'websockets', parser: 'JSON' });
 primus.on('disconnection', function (spark) {
 	
 	console.log("spark uid " + spark.uid + "disconnected");
+	debugger;
 	disconnected[spark.uid] = session.assert(new isDisconnected({uid : spark.uid}));
 	for (var i = factsPerUser[spark.uid].length - 1; i >= 0; i--) {
 		//now it s implemented in nools
@@ -219,12 +224,13 @@ function initNools(file,scope){
 		scope = {};
 
 	flow = compile(scope,file);
-	 flow.rule("retractLeased", {salience: 7}, [
-        [isDisconnected, "id", {uid:"uid"}],
+	/*flow.rule("retractLeased", {salience: 7}, [
+        [isDisconnected, "id",{uid:"uid"}],
         [Object, "f", "f.__uid == uid && f.retractOnDisconnection == true" ]
     ], function (facts) {
         this.retract(facts.f);
-    });
+    });*/
+
 	session = flow.getSession(addTimeLeasedFact);
 	updateDate();
 	session.on("assert", function(data){
@@ -242,6 +248,10 @@ function initNools(file,scope){
 			var type = getType(data);
 			sendToListeners(type,data);
 			mySend(webSockets[data.__uid],data,UPDATE_FACT_SERVER);
+		}
+		if(factSent[data.objectId] != undefined){
+			for(i = 0 ; i < factSent[data.objectId]; i++ )
+				mySend(webSockets[factSent[i]], data, UPDATE_FACT_PREVIOUSLY_SENT);
 		}
 	});
 
@@ -327,8 +337,10 @@ function dispatch(message,ws){
     			//reconnection
     			//get all the messages, reassart all the facts, reassert all the messages
     			console.log("reconnection of uid " + messageUID);
-    			if(disconnected[uid])
+    			if(disconnected[uid]){
     				session.retract(disconnected[uid]);
+    				disconnected[uid] = null;
+    			}
     			/*if(webSockets[messageUID] && webSockets[messageUID].bufferedMessages){
     				var bufferedMessages = webSockets[messageUID].bufferedMessages;
     				//check for expired messages
@@ -405,7 +417,7 @@ function dispatch(message,ws){
 				//webSockets[obj.objectId] = ws;
 				var cb = sendId(ws,obj.__clientObjectId);
 				var fact;
-				debugger;
+				
 				if(message.data.opts != undefined){
 					if(message.data.opts.leaseTime != undefined){
 						cb = function(_id, id,objectId){
@@ -415,12 +427,14 @@ function dispatch(message,ws){
 					}
 					
 				}
+				debugger;
 				fact = myAssert(obj,cb);
 				fact.__uid = uid;
 				factsPerUser[uid].push(fact);
 				if(message.data.opts != undefined ){
 					if(message.data.opts.retractOnDisconnection != undefined){
 						fact.retractOnDisconnection = true;
+
 					}
 
 					if(message.data.opts.retractWith != undefined){
@@ -655,20 +669,33 @@ function notifyAll(fact1 , fact2){
 }
 
 var countMatches = 0;
-//@target and @message are two instance of 2 (or the same) templates
+
 //notify the sender of the obj target with message
 //object is to get the id of the message for successive retract
-function notify(target,type, message,object){
-	object.__uid = target.__uid;
-	if(!object){
-		message = type;
-		type = getType(message)
-	}
+function notify(target,type, facts){
+	var ws = webSockets[target.__uid];
+	if(!util.isArray(facts))
+		facts = [facts];
+	//save the facts that you are sending so that if in the future there's a change to them you send the updates to the user
+	for(i = 0 ; i < facts.size; i++){
+		//for every fact sent you keep a list of ws that are 
+		//TODO: check that if u have a disconnection change the ws
+		if(factSent[fact.objectId] == undefined)
+			factSent[fact.objectId] = [];
+		factSent[fact.objectId].push(target.__uid);
+}
 	if(typeof webSockets[target.__uid] == 'undefined'){
 		throw "no websocket associated to " + target;
 	}else{
-		mySend(webSockets[target.__uid],message,type,object.objectId); 
-	}	
+		mySend(ws,facts,type,object.objectId); 
+	}
+	var message = {}
+	message.onCancel = function(fact){
+		if(ws.readyState == ws.primus.Socket.OPEN){
+			obj = {data: message, __type : type, id:fact.objectId}
+			ws.bufferedMessages.push(obj);
+		}
+	}
 	/*}else{
 		message = type;
 		if(typeof webSockets[target.__uid] == 'undefined'){

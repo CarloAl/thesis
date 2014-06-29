@@ -16,6 +16,8 @@ var UPDATE_FACT_SERVER        = 12312;
 var DISPOSE                   = 12313;
 var USER_ID                   = 12314;
 var NEW_USER_ID               = 12315;
+//value of the __type in a websocket message, when the server send a new version of a previously sent fact
+var UPDATE_FACT_PREVIOUSLY_SENT = 12316
 
 var factId = 0
 var fact
@@ -323,7 +325,19 @@ require(["../js/reflect.js","/primus/primus.js","../js/jsonfn.js"], function(ref
                 var ruleName = message.data.ruleName;
                 rules[ruleName](facts);
                 break;
+            case UPDATE_FACT_PREVIOUSLY_SENT:
+                var updatedFact = message.data;
+                var oldFact = assertedFacts[updatedFact.__clientObjectId];
+                for(i in updatedFact)
+                    if(oldFact.hasOwnProperty(i) && i.substring(0,2) != "__" && i!= "objectId")
+                        oldFact[i] = updatedFact[i];
+                break;
+                //if there's a callback registered on the onModify, call it
+                if(fact.onModify)
+                    fact.onModify();
+                break;
             case UPDATE_FACT_SERVER :
+
                 var updatedFact = message.data;
                 var oldFact = assertedFacts[updatedFact.__clientObjectId];
                 for(i in updatedFact)
@@ -335,7 +349,7 @@ require(["../js/reflect.js","/primus/primus.js","../js/jsonfn.js"], function(ref
                     fact.onModify();
             default:
                 if(typeof primus.customCallBack["__custom__" +type] == "function")
-                    primus.customCallBack["__custom__" + type](message.data);  
+                    primus.customCallBack["__custom__" + type].apply(this,message.data);  
                 else{
                     debugger;
                     throw new Error ( "No customCallBack for " + type);

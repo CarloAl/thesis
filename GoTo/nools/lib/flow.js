@@ -81,7 +81,7 @@ module.exports = declare(EventEmitter, {
                 main.addTimeLeasedFact(fact._id, fact.object, opts.leaseTime);
             }
             that.rootNode.assertFact(mongoFact);
-            return fact;
+            return mongoFact;
         },
 
         setGlobalPromise: function (){

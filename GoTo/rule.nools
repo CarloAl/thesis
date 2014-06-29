@@ -6,7 +6,7 @@ global SHOULD_NOT_BE_GOING_TO = 3;
 global SHOULD_TAKE_TRAM = 4;
 global NEW_EVENT = 5;
 
-function debug(){
+function debug(a){
 	debugger;
 	return true;
 }
@@ -23,7 +23,8 @@ rule "shouldBeGoingToBecauseofEvent" {
         var sg = new shouldGoTo({personId: ip.personId, placeId : e.placeId}, {leaseTime: endTime - new Date()});
         assert(sg);
         console.log("** assert SHOULD_BE_GOING_TO_BECAUSE_OF_EVENT");
-        notify(ip, SHOULD_BE_GOING_TO_BECAUSE_OF_EVENT, e/*, sg*/);
+        var message = notify(ip, SHOULD_BE_GOING_TO_BECAUSE_OF_EVENT, e);
+        message.cancelOn(sg);
     }
 }
 
@@ -56,7 +57,7 @@ rule "leavingPlace"{
 rule "isAtPlaceRule"{
 	when{
 		h : hasCoordinates {placeId: ln, latBL: latBL, longBL: longBL, latUR: latUR, longUR: longUR};
-		at : isAtCoordinates checkifInBetween(at.lat , at.long, latBL, longBL, latUR, longUR,"is at place") {personId: personId};
+		at : isAtCoordinates checkifInBetween(at.lat , at.long, latBL, longBL, latUR, longUR) {personId: personId};
 		not ( iap : isAtPlace iap.personId == personId && iap.placeId == ln);
 	}then{
 		assert(new isAtPlace({personId : at.personId, placeId: h.placeId}));
@@ -95,12 +96,17 @@ rule "shouldBeGoingToBecauseofFriend"{
 		not (iap3: isAtPlace iap3.personId == anOtherPerson && iap3.placeId == place1);
 		iatc1: isAtCoordinates iatc1.personId == anOtherPerson {lat :personLat, long:personLong};
 		hc: hasCoordinates hc.placeId == place1 && closeEnough(personLat, personLong, hc.latBL, hc.longBL, hc.latUR, hc.longUR,CLOSE_ENOUGH_DISTANCE);
-		not( sg : shouldGoTo sg.personId == anOtherPerson && sg.placeId == place1);
+		not(sg : shouldGoTo sg.personId == anOtherPerson && sg.placeId == place1);
 	}then{
 		var sg = new shouldGoTo({personId : f1.personId2, placeId: iap1.placeId });
 		assert( sg);
 		console.log("**asserted shouldGoTo");
-		notify(iatc1, SHOULD_BE_GOING_TO_BECAUSE_OF_FRIEND, {friend1 : f1.personId1, friend2: f2.personId1, placeId: iap1.placeId}/*, sg*/);
+
+		//notify(iatc1, SHOULD_BE_GOING_TO_BECAUSE_OF_FRIEND, {friend1 : f1.personId1, friend2: f2.personId1, placeId: iap1.placeId}, sg);
+		//the sending of a message is a kind of lease to sg
+		
+		var message = notify(iatc1, SHOULD_BE_GOING_TO_BECAUSE_OF_FRIEND, [f1,f2,iap1]);
+		message.cancelOn(sg);
 	}
 }
 
@@ -114,7 +120,7 @@ rule "avoid"{
 	}then{
 		assert (new shouldNotGoTo({personId: wa.avoider , placeId:iap.placetoAvoid})); //gets retracted after being send to the client
 		console.log("**asserted shouldnot GoTo");
-		notify(ic, SHOULD_NOT_BE_GOING_TO, { place : iap.placeId });
+		notify(ic, SHOULD_NOT_BE_GOING_TO, iap);
 	}
 }
 
@@ -144,7 +150,8 @@ rule "closeFriend" {
 		console.log(" close friend assert***");
 		var n = new notifyCloseFriend({personIdNotified: f1.personId1 , personIdNotification: f1.personId2});
 		assert (n); 
-		notify(f1, FRIEND_CLOSE, iac2,n);
+		var message = notify(f1, FRIEND_CLOSE, iac2);
+		message.cancelOn(n);
 	}
 }
 
@@ -178,6 +185,7 @@ rule "retracttaketram too far" {
 		console.log("*** retract notifyPT");
 	}
 }
+
 rule "taketram" {
 	when{
 		ie : isEvent	 {eventId: eventId, placeId: placeId, startTime: startTime, endTime:endTime};
@@ -191,7 +199,8 @@ rule "taketram" {
 		console.log("*** assert notifyPT");
 		var n = new notifyPT({personIdNotified: ip.personId, publicTransportation: gh.publicTransportation, direction: timeTable.direction, time : timeTable.time},{leaseTime : new Date () - tt.time});
 		assert(n);
-		notify(iat, SHOULD_TAKE_TRAM, tt,n);
+		var mssage = notify(iat, SHOULD_TAKE_TRAM, tt);
+		message.cancelOn(n);
 	}
 }
 
@@ -208,6 +217,18 @@ rule "forwardEvent" {
 		console.log("assert notify event");
 		var n = new notifyEvent({eventId: eventId, placeId: placeId, startTime: startTime, endTime:endTime});
 		assert(n);
-		notify(f1,NEW_EVENT,ie/*,n*/);
+		var mssage = notify(f1,NEW_EVENT,ie);
+		message.cancelOn(n);
 	}
+}
+
+
+rule "retractLeased" {
+	salience: 7;
+	when{
+		id : isDisconnected {uid:uid};
+		f: Object debug(f);//f.__uid == uid && f.retractOnDisconnection == true && ;
+	}then{
+		retract(f);
+   	}
 }
